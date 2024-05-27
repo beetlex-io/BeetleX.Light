@@ -98,6 +98,8 @@ public class User
     public string Email { get; set; }
 }
 ```
+![image](https://github.com/beetlex-io/BeetleX.Light/assets/2564178/1b06cde0-b9ac-457e-9997-ce8babb4d5d9)
+
 ### Server
 ``` csharp
 NetServer<Application, Session> netServer = new NetServer<Application, Session>();
@@ -184,3 +186,4 @@ public class User
     public string Email { get; set; }
 }
 ```
+![image](https://github.com/beetlex-io/BeetleX.Light/assets/2564178/a073f9c7-5c28-4dbb-b793-8367f8dc7748)
