@@ -99,7 +99,7 @@ public class User
 }
 ```
 ### Server
-``` chsarp
+``` csharp
 NetServer<Application, Session> netServer = new NetServer<Application, Session>();
 netServer.Options.SetDefaultListen(o =>
 {
