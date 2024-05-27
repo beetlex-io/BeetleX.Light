@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net7.0;net8.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Copyright>Copyright © beetlex-io.com 2019-2024 email:  henryfan@msn.com</Copyright>
+    <SignAssembly>False</SignAssembly>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <Authors>henryfan</Authors>
+    <Company>BeetleX</Company>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IO.Pipelines" Version="8.0.0" />
+    <PackageReference Include="System.Memory" Version="4.5.5" />
+    <PackageReference Include="System.Text.Json" Version="9.0.0-preview.4.24266.19" />
+  </ItemGroup>
+
+</Project>
