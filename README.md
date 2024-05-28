@@ -71,7 +71,6 @@ client.SslServiceName = "beetlex-io.com";
 client.SetProtocolChannel<JsonChannel<NetClient>>();
 client.AddLogOutputHandler<LogOutputToConsole>();
 client.LogLevel = LogLevel.Trace;
-client.TimeOut = 1000000;
 var request = new Register();
 request.Name = "henryfan";
 request.Email = "henryfan@msn.com"; ;
