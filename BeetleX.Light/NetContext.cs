@@ -126,6 +126,8 @@ namespace BeetleX.Light
                     Server.GetLoger(LogLevel.Trace)?.Write(this, "NetContext", "✉ ReceiveData", $"{Convert.ToHexString(memory.Slice(0, bytesRead).Span)}");
                     if (bytesRead == 0)
                     {
+                        GetLoger(LogLevel.Info)?.Write(this, "NetContext", "ReceiveData", $"receive data is 0");
+                        await Task.Delay(Constants.ReceiveZeroDelayTime);
                         break;
                     }
                     writer.Advance(bytesRead);

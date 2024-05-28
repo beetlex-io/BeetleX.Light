@@ -24,6 +24,17 @@ namespace BeetleX.Light.Logs
 
         public ILogHandler Loger { get; set; }
 
+
+        public void Write(EndPoint location, string model, string tag, string message)
+        {
+            Write(location?.ToString(), model, tag, message, null);
+        }
+
+        public void WriteException(EndPoint location, string model, string tag, Exception e_)
+        {
+            Write(location?.ToString(), model, tag, e_.Message, e_.StackTrace);
+        }
+
         public void Write(Socket location, string model, string tag, string message)
         {
             Write(location?.RemoteEndPoint?.ToString(), model, tag, message, null);

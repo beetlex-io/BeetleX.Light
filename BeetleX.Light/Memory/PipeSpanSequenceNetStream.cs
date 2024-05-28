@@ -118,7 +118,9 @@ namespace BeetleX.Light.Memory
                             callBack(context);
                     }
                     else
+                    {
                         break;
+                    }
                     if (result.IsCompleted)
                     {
                         break;
@@ -126,12 +128,12 @@ namespace BeetleX.Light.Memory
                 }
                 catch (Exception e_)
                 {
-                    context.GetLoger(Logs.LogLevel.Error)?.WriteException(context, "PipSequenceStream", "ReadData", e_);
+                    context.GetLoger(Logs.LogLevel.Debug)?.WriteException(context, "PipSequenceStream", "ReadData", e_);
                     context.Close(e_);
                     break;
                 }
             }
-//            LogHandler?.GetLoger(LogLevel.Debug)?.Write(LogHandler, "PipSequenceStream", "ReadData", "completed");
+            //            LogHandler?.GetLoger(LogLevel.Debug)?.Write(LogHandler, "PipSequenceStream", "ReadData", "completed");
         }
 
         public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default(CancellationToken))

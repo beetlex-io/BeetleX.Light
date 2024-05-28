@@ -9,5 +9,7 @@ namespace BeetleX.Light
     internal class Constants
     {
         public static int StackMaxSize = 1024;
+
+        public static int ReceiveZeroDelayTime = 5000;
     }
 }

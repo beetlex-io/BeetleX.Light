@@ -45,5 +45,6 @@ namespace BeetleX.Light.Memory
 
         void WriteBinaryObject(HeaderSizeType type, object msg, Action<Stream, object> handler);
 
+        void Write(byte[] buffer, int offset, int count);
     }
 }

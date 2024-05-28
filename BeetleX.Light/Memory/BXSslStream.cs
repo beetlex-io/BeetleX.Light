@@ -36,9 +36,11 @@ namespace BeetleX.Light.Memory
         public override void Write(byte[] buffer, int offset, int count)
         {
             base.Write(buffer, offset, count);
-            LogHandler?.GetLoger(LogLevel.Debug)?.Write(LogHandler, "BXSslStream", "SyncData",      $"Write length {count}");
+            LogHandler?.GetLoger(LogLevel.Debug)?.Write(LogHandler, "BXSslStream", "SyncData", $"Write length {count}");
             LogHandler?.GetLoger(Logs.LogLevel.Trace)?.Write(LogHandler, "BXSslStream", "✉ SyncData", $"Write {Convert.ToHexString(buffer, offset, count)}");
         }
+
+        private bool _disposed = false;
 
         protected override void Dispose(bool disposing)
         {
@@ -48,6 +50,7 @@ namespace BeetleX.Light.Memory
             {
                 try
                 {
+                    _disposed = true;
                     OnlySequenceAdapterStream?.Dispose();
                     LogHandler?.GetLoger(LogLevel.Debug)?.Write(LogHandler, "BXSslStream", "\u2714 Disposed", "");
                 }
@@ -82,13 +85,19 @@ namespace BeetleX.Light.Memory
                     }
                     else
                     {
-                        throw new BXException("sync data to OnlySequence error, receive data is 0!");
+                        ((PipeSpanSequenceNetStream)InnerStream).ReaderAdvanceTo();
+                        await Task.Delay(Constants.ReceiveZeroDelayTime);
+                        if (!_disposed)
+                        {
+                            throw new BXException("sync data to OnlySequence error, receive data is 0!");
+                        }
+                        break;
                     }
 
                 }
                 catch (Exception e_)
                 {
-                    context.GetLoger(Logs.LogLevel.Warring)?.WriteException(context, "BXSslStream", "SyncData", e_);
+                    context.GetLoger(Logs.LogLevel.Debug)?.WriteException(context, "BXSslStream", "SyncData", e_);
                     context.Close(e_);
                     break;
                 }

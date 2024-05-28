@@ -10,15 +10,15 @@ using System.Threading.Tasks;
 
 namespace BeetleX.Light.Clients
 {
-    public class AwaiterNetClient<T> : NetClient
-        where T : IProtocolChannel<NetClient>
+    public class AwaiterNetClient<PROTOCOL> : NetClient
+        where PROTOCOL : IProtocolChannel<NetClient>, new()
     {
 
         private System.Collections.Concurrent.ConcurrentDictionary<Type, IAnyCompletionSource> _completionSources = new System.Collections.Concurrent.ConcurrentDictionary<Type, IAnyCompletionSource>();
 
         public AwaiterNetClient(string host, int port) : base(host, port)
         {
-
+            this.SetProtocolChannel(new PROTOCOL());
         }
 
 
@@ -49,16 +49,16 @@ namespace BeetleX.Light.Clients
             return anyCompletionSource.Task;
         }
 
-        public static implicit operator AwaiterNetClient<T>((string, int) info)
+        public static implicit operator AwaiterNetClient<PROTOCOL>((string, int) info)
         {
-            var NetClient = new AwaiterNetClient<T>(info.Item1, info.Item2);
+            var NetClient = new AwaiterNetClient<PROTOCOL>(info.Item1, info.Item2);
             return NetClient;
         }
 
-        public static implicit operator AwaiterNetClient<T>(string uri)
+        public static implicit operator AwaiterNetClient<PROTOCOL>(string uri)
         {
             Uri uriInfo = new Uri(uri);
-            var NetClient = new AwaiterNetClient<T>(uriInfo.Host, uriInfo.Port);
+            var NetClient = new AwaiterNetClient<PROTOCOL>(uriInfo.Host, uriInfo.Port);
             return NetClient;
         }
         protected override void OnDisconnect(Exception error)

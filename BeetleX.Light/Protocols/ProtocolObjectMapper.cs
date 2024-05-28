@@ -38,21 +38,24 @@ namespace BeetleX.Light.Protocols
 
         protected abstract void OnWriteType(Stream writer, T value, bool littleEndian);
 
-        public ObjectMapperInfo<T> ReadType(ReadOnlyMemory<byte> reader, bool littleEndian )
+        public ObjectMapperInfo<T> ReadType(ReadOnlyMemory<byte> reader, bool littleEndian)
         {
             ObjectMapperInfo<T> result = new ObjectMapperInfo<T>();
             var value = OnReadType(reader, littleEndian);
-            _valueToType.TryGetValue(value.Item1, out Type type);
+            if (!_valueToType.TryGetValue(value.Item1, out Type type))
+            {
+                throw new BXException($"{value} not exist mapper type!");
+            }
             result.Value = value.Item1;
             result.MessageType = type;
-            result.BUffersLength = value.Item2;
+            result.BuffersLength = value.Item2;
             return result;
         }
 
         public abstract (T, int) OnReadType(ReadOnlyMemory<byte> reader, bool littleEndian);
 
 
-        public ObjectMapperInfo<T> ReadType(Stream reader, bool littleEndian )
+        public ObjectMapperInfo<T> ReadType(Stream reader, bool littleEndian)
         {
             ObjectMapperInfo<T> result = new ObjectMapperInfo<T>();
             var value = OnReadType(reader, littleEndian);
@@ -182,7 +185,7 @@ namespace BeetleX.Light.Protocols
 
         public Type MessageType { get; set; }
 
-        public int BUffersLength { get; set; }
+        public int BuffersLength { get; set; }
     }
 
     [AttributeUsage(AttributeTargets.Class)]

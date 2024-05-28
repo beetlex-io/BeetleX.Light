@@ -27,7 +27,7 @@ namespace BeetleX.Light.Clients
             Host = host;
             Port = port;
             LineEof = Encoding.UTF8.GetBytes("\r\n");
-            TimeOut = 10000;
+            TimeOut = 20000;
 
         }
 
@@ -57,6 +57,8 @@ namespace BeetleX.Light.Clients
         public int LineMaxLength { get; set; } = 1024 * 4;
 
         public byte[] LineEof { get; set; }
+
+        public bool NoDelay { get; set; } = false;
 
         public struct ConnectStatus
         {
@@ -215,14 +217,15 @@ namespace BeetleX.Light.Clients
                     GetLoger(LogLevel.Trace)?.Write(this, "NetClient", "✉ ReceiveData", $"{Convert.ToHexString(memory.Slice(0, bytesRead).Span)}");
                     if (bytesRead == 0)
                     {
-
+                        GetLoger(LogLevel.Info)?.Write(this, "NetClient", "ReceiveData", $"receive data is 0");
+                        await Task.Delay(Constants.ReceiveZeroDelayTime);
                         break;
                     }
                     writer.Advance(bytesRead);
                 }
                 catch (Exception ex)
                 {
-                    GetLoger(Logs.LogLevel.Error)?.WriteException(this, "NetClient", "ReceiveData", ex);
+                    GetLoger(Logs.LogLevel.Warring)?.WriteException(this, "NetClient", "ReceiveData", ex);
                     break;
                 }
                 FlushResult result = await writer.FlushAsync();
@@ -360,7 +363,7 @@ namespace BeetleX.Light.Clients
                 {
                     GetLoger(Logs.LogLevel.Debug)?.Write(this, "NetClient", $"{ProtocolChannel?.Name}Decoding", "");
                     ProtocolChannel.Decoding(client.NetStreamHandler, OnReceive);
-                   
+
                 }
                 catch (Exception e_)
                 {
@@ -431,6 +434,7 @@ namespace BeetleX.Light.Clients
             // This is the IP address of the local machine
             IPAddress localIpAddress = localhost.AddressList[0];
             Socket = new Socket(localIpAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+            Socket.NoDelay = NoDelay;
             if (LocalEndPoint != null)
                 Socket.Bind(LocalEndPoint);
             EndPoint = new IPEndPoint(localIpAddress, Port);

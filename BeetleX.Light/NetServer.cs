@@ -26,7 +26,7 @@ namespace BeetleX.Light
         public NetServer()
         {
             _acceptthreadDispatcher
-            = new SingleThreadDispatcher<(Socket, ListenHandler)>(OnConnecting);
+            = new DispatchCenter<(Socket, ListenHandler)>(OnConnecting, Environment.ProcessorCount > 4 ? 2 : 1);
             CommandLineParser = CommandLineParser.GetCommandLineParser();
         }
 
@@ -34,7 +34,7 @@ namespace BeetleX.Light
 
         private System.Collections.Concurrent.ConcurrentDictionary<long, NetContext> _userContexts = new System.Collections.Concurrent.ConcurrentDictionary<long, NetContext>();
 
-        private SingleThreadDispatcher<(Socket, ListenHandler)> _acceptthreadDispatcher;
+        private DispatchCenter<(Socket, ListenHandler)> _acceptthreadDispatcher;
 
         public CommandLineParser CommandLineParser { get; set; }
 
@@ -152,7 +152,7 @@ namespace BeetleX.Light
                 {
                     _userContexts.TryRemove(netContext.ID, out netContext);
                     OnApplicationDisconnect(netContext);
-                    netContext.Dispose();
+                    netContext?.Dispose();
                 }
             }
         }
@@ -163,7 +163,7 @@ namespace BeetleX.Light
             {
                 GetLoger(LogLevel.Debug)?.Write(context, "Session", "Receive", messgae == null ? context.NetStreamHandler.ReadSequenceNetStream.Length.ToString() : messgae.ToString());
                 context.Session.Receive(context, context.NetStreamHandler, messgae);
-                
+
             }
             catch (Exception e_)
             {
@@ -187,7 +187,7 @@ namespace BeetleX.Light
                 {
                     GetLoger(LogLevel.Debug)?.Write(this, "NetContext", $"{context.ProtocolChannel?.Name}Decoding", "");
                     context.ProtocolChannel.Decoding(context.NetStreamHandler, OnReceive);
-                    
+
                 }
                 catch (Exception e_)
                 {

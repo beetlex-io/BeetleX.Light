@@ -12,6 +12,8 @@ namespace BeetleX.Light.Memory
         
         bool LittleEndian { get; }
 
+        long Length { get; }
+
         string ReadString(Encoding coding = null, int length = 0);
 
         bool TryReadLine(out string result, Encoding coding = null);
@@ -42,6 +44,6 @@ namespace BeetleX.Light.Memory
 
         object ReadBinaryObject(HeaderSizeType type, Func<ReadOnlyMemory<byte>, object> handler);
 
-
+        int Read(byte[] buffer, int offset, int count);
     }
 }

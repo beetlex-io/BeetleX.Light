@@ -36,6 +36,8 @@ namespace BeetleX.Light.Memory
 
         public ISpanSequenceNetStream WriteSequenceNetStream { get; internal set; }
 
+        public long Length => ReadSequenceNetStream.Length;
+
         public static implicit operator StreamHandler(Stream stream)
         {
             StreamHandler handler = new StreamHandler();
@@ -213,6 +215,11 @@ namespace BeetleX.Light.Memory
         }
         #endregion
 
+        public void Write(byte[] buffer, int offset, int count)
+        {
+            Stream.Write(buffer, offset, count);
+        }
+
         #region int
         public void WriteInt(int value)
         {
@@ -272,6 +279,11 @@ namespace BeetleX.Light.Memory
             return result;
         }
         #endregion
+
+        public int Read(byte[] buffer, int offset, int count)
+        {
+            return Read(buffer, offset, count);
+        }
 
         #region int16
         public void WriteInt16(short value)

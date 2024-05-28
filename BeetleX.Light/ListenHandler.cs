@@ -68,6 +68,8 @@ namespace BeetleX.Light
 
         internal Exception Error { get; set; }
 
+        public bool NoDelay { get; set; } = false;
+
         public IProtocolChannel<NetContext> ProtocolChannel { get; set; }
 
         public void SetProtocolChannel<T>()
@@ -262,6 +264,7 @@ namespace BeetleX.Light
                 {
                     await OnPause();
                     var acceptSocket = await Socket.AcceptAsync();
+                    acceptSocket.NoDelay = NoDelay;
                     Server.SocketConnecting(acceptSocket, this);
                     mAccetpError = 0;
                 }
