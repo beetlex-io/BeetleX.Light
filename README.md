@@ -1,5 +1,5 @@
 ## BeetleX.Light
-Based on pipelines high performance dotnet core socket tcp communication components, support tls, http, https, websocket, rpc, mqtt, redis protocols, millions of connections are supported.
+Based on pipelines high performance dotnet core socket tcp/udp communication components, support tls, http, https, websocket, rpc, mqtt, redis protocols, millions of connections are supported.
 
 ## base
 ``` csharp
@@ -177,3 +177,65 @@ public class RegComp
 }
 ```
 ![image](https://github.com/beetlex-io/BeetleX.Light/assets/2564178/28a9ab60-1769-41fb-b673-43d92656564f)
+
+## UDP
+``` csharp
+using BeetleX.Light.Logs;
+using BeetleX.Light.Protocols;
+using BeetleX.Light.UDP;
+using System.Data;
+using System.Text.Json;
+
+ProtocolMessageMapperFactory.StringMapper.RegisterAssembly<JsonChannel>();
+UdpServer udp = "udp://127.0.0.1:8088";
+udp.AddLogOutputHandler<LogOutputToConsole>();
+udp.SetProtocolChannel<JsonChannel>();
+udp.Receive = async (s, d) =>
+{
+    Register reg = (Register)d.Message;
+    s.GetLoger(LogLevel.Info)?.Write(d.RemoteEndPoint, "UdpData", "Receive", $"name:{reg.Name} email:{reg.Email}");
+    RegComp regComp = new RegComp();
+    regComp.Success = true;
+    regComp.RegTime = DateTime.Now;
+    d.Reply(regComp);
+};
+udp.Start();
+
+Console.ReadLine();
+
+public class JsonChannel : IUdpProtocolChannel
+{
+    public string Name { get => "JsonChannel"; }
+
+    public object Read(ReadOnlyMemory<byte> buffer, bool littleEndian)
+    {
+        var result = ProtocolMessageMapperFactory.StringMapper.ReadType(buffer, littleEndian);
+        buffer = buffer.Slice(result.BuffersLength);
+        return JsonSerializer.Deserialize(buffer.Span, result.MessageType);
+    }
+
+    public void Write(Stream stream, object data, bool littleEndian)
+    {
+        ProtocolMessageMapperFactory.StringMapper.WriteType(stream, data, littleEndian);
+        JsonSerializer.Serialize(stream, data);
+    }
+}
+
+[ProtocolObject]
+public class Register
+{
+    public string Name { get; set; }
+
+    public string Email { get; set; }
+
+    public string Password { get; set; }
+}
+
+[ProtocolObject]
+public class RegComp
+{
+    public bool Success { get; set; }
+
+    public DateTime RegTime { get; set; }
+}
+```
