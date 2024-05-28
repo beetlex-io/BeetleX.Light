@@ -62,7 +62,7 @@ namespace BeetleX.Light.Memory
             }
         }
         public async Task SyncData<T>(T context, Action<T> completed)
-            where T : IGetLogHandler, ILocation, IContextClose
+            where T : IGetLogHandler, ILocation, INetContext
         {
             while (true)
             {

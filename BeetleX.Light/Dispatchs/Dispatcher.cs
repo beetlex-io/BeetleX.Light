@@ -18,7 +18,7 @@ namespace BeetleX.Light.Dispatchs
 
         private bool _doingWork;
 
-        private int mCount;
+        private long mCount;
 
         private Func<T, Task> Process;
 
@@ -26,7 +26,7 @@ namespace BeetleX.Light.Dispatchs
 
         public Func<T, Exception, Task> ProcessError { get; set; }
 
-        public int Count => System.Threading.Interlocked.Add(ref mCount, 0);
+        public long Count => System.Threading.Interlocked.Add(ref mCount, 0);
 
         public void Enqueue(T item)
         {

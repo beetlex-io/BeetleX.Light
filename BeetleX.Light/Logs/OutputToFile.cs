@@ -67,7 +67,7 @@ namespace BeetleX.Light.Logs
         {
             mWriteCount++;
             StreamWriter writer = GetWriter();
-            writer.Write($"[{e.Level.ToString().PadRight(6)}] [{e.DateTime:yyyy-MM-dd HH:mmm:ss}] {e.ThreadID.ToString("000")} [{e.Location.PadRight(16)} {e.Model} {e.Tag.PadLeft(30 - e.Model.Length)}] {e.Message}");
+            writer.Write($"[{e.Level.ToString().PadLeft(7)}] [{e.DateTime:yyyy-MM-dd HH:mmm:ss}] {e.ThreadID.ToString("000")} [{e.Location.PadRight(16)} {e.Model} {e.Tag.PadLeft(30 - e.Model.Length)}] {e.Message}");
             if (!string.IsNullOrEmpty(e.StackTrace))
                 writer.WriteLine($"\t\t{e.StackTrace}");
             writer.WriteLine("");

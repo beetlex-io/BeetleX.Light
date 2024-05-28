@@ -21,7 +21,6 @@ namespace BeetleX.Light.Memory
         {
             Owner.Dispose();
         }
-
         public static implicit operator TemporaryBuffer<T>(int length)
         {
             TemporaryBuffer<T> result = new TemporaryBuffer<T>();

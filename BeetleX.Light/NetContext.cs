@@ -12,10 +12,11 @@ using System.Threading.Tasks;
 using BeetleX.Light.Logs;
 using BeetleX.Light.Memory;
 using BeetleX.Light.Protocols;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace BeetleX.Light
 {
-    public class NetContext : IDisposable, ILocation, IGetLogHandler, IContextClose
+    public class NetContext : IDisposable, INetContext
     {
         public NetContext(Socket socket)
         {
@@ -53,8 +54,16 @@ namespace BeetleX.Light
         private int _sendState = 0;
         public bool Send(object message)
         {
-            if (message == null || Disposed)
+            if (message == null)
+            {
+                GetLoger(LogLevel.Warring)?.Write(this, "NetContext", $"Send", "Message is null");
                 return false;
+            }
+            if (Disposed)
+            {
+                GetLoger(LogLevel.Warring)?.Write(this, "NetContext", $"Send", "Session disposed");
+                return false;
+            }
             _sendQueue.Enqueue(message);
             if (_sendQueue.Count > 0)
                 OnSend(System.Threading.Interlocked.CompareExchange(ref _sendState, 1, 0) == 0);
@@ -66,12 +75,12 @@ namespace BeetleX.Light
             {
                 if (Disposed) return;
                 bool haveData = false;
-                while (_sendQueue.TryDequeue(out object msg))
+                while (_sendQueue.TryDequeue(out object msg) && !Disposed)
                 {
                     haveData = true;
                     if (msg is IProtocolData dataWriter)
                     {
-                        dataWriter.Write(DataStream);
+                        dataWriter.Write(NetStreamHandler);
                     }
                     else
                     {
@@ -86,18 +95,19 @@ namespace BeetleX.Light
 
                             try
                             {
-                                ProtocolChannel.Encoding(DataStream, msg);
+                                ProtocolChannel.Encoding(NetStreamHandler, msg);
+                                GetLoger(LogLevel.Debug)?.Write(this, "NetContext", $"{ProtocolChannel?.Name}Encoding", "");
                             }
                             catch (Exception e_)
                             {
-                                Server.GetLoger(LogLevel.Error)?.WriteException(this, "NetContext", $"{ProtocolChannel?.Name}ChannelEncoding", e_);
+                                GetLoger(LogLevel.Error)?.WriteException(this, "NetContext", $"{ProtocolChannel?.Name}Encoding", e_);
                                 Dispose();
                             }
                         }
                     }
                 }
                 if (haveData)
-                    DataStream.Flush();
+                    NetStreamHandler.Flush();
                 _sendState = 0;
             }
 
@@ -122,7 +132,7 @@ namespace BeetleX.Light
                 }
                 catch (Exception ex)
                 {
-                    Server.GetLoger(Logs.LogLevel.Error)?.WriteException(this, "NetContext", "ReceiveData", ex);
+                    Server?.GetLoger(Logs.LogLevel.Error)?.WriteException(this, "NetContext", "ReceiveData", ex);
                     break;
                 }
                 FlushResult result = await writer.FlushAsync();
@@ -227,7 +237,7 @@ namespace BeetleX.Light
 
         private StreamHandler _streamHandler;
 
-        public StreamHandler DataStream
+        public StreamHandler NetStreamHandler
         {
             get
             {
@@ -254,7 +264,7 @@ namespace BeetleX.Light
             return Server?.GetLoger(level);
         }
 
-        void IContextClose.Close(Exception e)
+        void INetContext.Close(Exception e)
         {
             this.Dispose();
         }

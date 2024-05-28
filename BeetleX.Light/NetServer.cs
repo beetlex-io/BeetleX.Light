@@ -161,8 +161,9 @@ namespace BeetleX.Light
         {
             try
             {
-                context.Session.Receive(context, context.DataStream, messgae);
-                GetLoger(LogLevel.Debug)?.Write(context, "Session", "Receive", messgae == null ? context.DataStream.ReadSequenceNetStream.Length.ToString() : messgae.ToString());
+                GetLoger(LogLevel.Debug)?.Write(context, "Session", "Receive", messgae == null ? context.NetStreamHandler.ReadSequenceNetStream.Length.ToString() : messgae.ToString());
+                context.Session.Receive(context, context.NetStreamHandler, messgae);
+                
             }
             catch (Exception e_)
             {
@@ -184,11 +185,13 @@ namespace BeetleX.Light
             {
                 try
                 {
-                    context.ProtocolChannel.Decoding(context.DataStream, OnReceive);
+                    GetLoger(LogLevel.Debug)?.Write(this, "NetContext", $"{context.ProtocolChannel?.Name}Decoding", "");
+                    context.ProtocolChannel.Decoding(context.NetStreamHandler, OnReceive);
+                    
                 }
                 catch (Exception e_)
                 {
-                    GetLoger(Logs.LogLevel.Error)?.WriteException(context, "NetContext", $"{channel?.Name}ChannelDecoding", e_);
+                    GetLoger(Logs.LogLevel.Error)?.WriteException(context, "NetContext", $"{channel?.Name}Decoding", e_);
                     context.Dispose();
                     return;
                 }

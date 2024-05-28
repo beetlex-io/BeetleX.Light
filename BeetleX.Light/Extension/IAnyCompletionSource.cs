@@ -6,25 +6,35 @@ using System.Threading.Tasks;
 
 namespace BeetleX.Light.Extension
 {
-    interface IAnyCompletionSource
+    public interface IAnyCompletionSource
     {
         void Success(object data);
         void Error(Exception error);
         void Wait(Task task, Action<Task, IAnyCompletionSource> handler);
 
         Task GetTask();
+
+        Action<IAnyCompletionSource> CompletedHandler { get; set; }
+
+        object Token { get; set; }
+
     }
 
-    class AnyCompletionSource<T> : TaskCompletionSource<T>, IAnyCompletionSource
+    public class AnyCompletionSource<T> : TaskCompletionSource<T>, IAnyCompletionSource
     {
         public void Success(object data)
         {
+
+            CompletedHandler?.Invoke(this);
             TrySetResult((T)data);
+
         }
 
         public void Error(Exception error)
         {
+            CompletedHandler?.Invoke(this);
             TrySetException(error);
+
         }
 
 
@@ -46,10 +56,16 @@ namespace BeetleX.Light.Extension
             try
             {
                 await System.Threading.Tasks.Task.Delay(timeout);
+                CompletedHandler?.Invoke(this);
                 if (!this.Task.IsCompleted)
                     TrySetException(new TimeoutException(message));
+
             }
             catch { }
+            finally
+            {
+
+            }
         }
 
         public Task GetTask()
@@ -57,6 +73,7 @@ namespace BeetleX.Light.Extension
             return this.Task;
         }
 
-
+        public Action<IAnyCompletionSource> CompletedHandler { get; set; }
+        public object Token { get; set; }
     }
 }

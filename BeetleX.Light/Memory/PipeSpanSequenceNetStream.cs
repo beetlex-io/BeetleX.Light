@@ -84,7 +84,7 @@ namespace BeetleX.Light.Memory
         public IGetLogHandler LogHandler { get; set; }
 
         public async ValueTask ReadSocketData<T>(T context, Action<T> callBack)
-            where T : ILocation, IGetLogHandler, IContextClose
+            where T : ILocation, IGetLogHandler, INetContext
         {
             while (true)
             {

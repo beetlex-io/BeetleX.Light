@@ -196,7 +196,6 @@ namespace BeetleX.Light.Memory
             _buffer[postion + 1] = (byte)(value >> 8);
             _buffer[postion + 2] = (byte)(value >> 16);
             _buffer[postion + 3] = (byte)(value >> 24);
-
         }
 
         public static void Write(this byte[] _buffer, int postion, long value, bool littleEndian = true)
@@ -211,7 +210,6 @@ namespace BeetleX.Light.Memory
             _buffer[postion + 5] = (byte)(value >> 40);
             _buffer[postion + 6] = (byte)(value >> 48);
             _buffer[postion + 7] = (byte)(value >> 56);
-
         }
 
         public static void Write(this byte[] _buffer, int postion, ulong value, bool littleEndian = true)
@@ -226,7 +224,28 @@ namespace BeetleX.Light.Memory
             _buffer[postion + 5] = (byte)(value >> 40);
             _buffer[postion + 6] = (byte)(value >> 48);
             _buffer[postion + 7] = (byte)(value >> 56);
+        }
 
+        public static int WriteUTF(this Stream _buffer, string value, bool littleEndian = true)
+        {
+            int result = 0;
+            if (string.IsNullOrEmpty(value))
+            {
+                _buffer.Write((UInt16)0, littleEndian);
+                result = 2;
+            }
+            else
+            {
+                using (TemporaryBuffer<byte> bytes = value.Length * 6)
+                {
+                    Span<byte> span = bytes.GetSpan();
+                    result = Encoding.UTF8.GetBytes(value, span);
+                    _buffer.Write((UInt16)result, littleEndian);
+                    _buffer.Write(span.Slice(0, result));
+                    result += 2;
+                }
+            }
+            return result;
         }
 
         public static int Write(this Stream _buffer, string value, Encoding encoding)
@@ -498,13 +517,44 @@ namespace BeetleX.Light.Memory
 
         public static string ReadString(this byte[] _buffer, int postion, int count, Encoding coding)
         {
-
             return coding.GetString(_buffer, postion, count);
         }
+
         public static string ReadString(this ReadOnlySpan<byte> _buffer, Encoding coding)
         {
             return coding.GetString(_buffer);
         }
+
+
+        public static string ReadUTF(this ReadOnlySequence<byte> _buffer, out int length, bool littleEndian = true)
+        {
+            int len = _buffer.ReadUInt16(littleEndian);
+            _buffer = _buffer.Slice(2, len);
+            length = len + 2;
+            return Encoding.UTF8.GetString(_buffer);
+        }
+
+        public static string ReadUTF(this ReadOnlyMemory<byte> _buffer, out int length, bool littleEndian = true)
+        {
+            int len = _buffer.Span.ReadUInt16(littleEndian);
+            _buffer = _buffer.Slice(2, len);
+            length = len + 2;
+            return Encoding.UTF8.GetString(_buffer.Span);
+        }
+
+        public static string ReadUTF(this Stream _buffer, bool littleEndian = true)
+        {
+            int len = _buffer.ReadUInt16(littleEndian);
+            if (len == 0)
+                return string.Empty;
+            using (TemporaryBuffer<byte> bytes = len)
+            {
+                Span<byte> span = bytes.GetSpan().Slice(0, len);
+                _buffer.Read(span);
+                return Encoding.UTF8.GetString(span);
+            }
+        }
+
         public static string ReadString(this Stream _buffer, int count, Encoding coding)
         {
             using (TemporaryBuffer<byte> bytes = count)

@@ -59,11 +59,11 @@ namespace BeetleX.Light.Dispatchs
             }
         }
 
-        public int Count
+        public long Count
         {
             get
             {
-                int count = 0;
+                long count = 0;
                 foreach (var item in mDispatchers)
                     count += item.Count;
                 return count;

@@ -19,7 +19,7 @@ using System.Threading.Tasks;
 
 namespace BeetleX.Light.Clients
 {
-    public class NetClient : ILogHandler, ILocation, IGetLogHandler, IContextClose
+    public class NetClient : ILogHandler, INetContext
     {
 
         public NetClient(string host, int port)
@@ -27,6 +27,8 @@ namespace BeetleX.Light.Clients
             Host = host;
             Port = port;
             LineEof = Encoding.UTF8.GetBytes("\r\n");
+            TimeOut = 10000;
+
         }
 
         public static implicit operator NetClient((string, int) info)
@@ -44,7 +46,7 @@ namespace BeetleX.Light.Clients
 
         public bool Connected { get; private set; }
 
-        public int ConnectTimeOut { get; set; } = 100000;
+        public int ConnectTimeOut { get; set; } = 10000;
 
         public int ReceiveBufferSize { get; set; } = 1024 * 4;
 
@@ -304,7 +306,7 @@ namespace BeetleX.Light.Clients
 
         private StreamHandler _streamHandler;
 
-        protected StreamHandler StreamHandler
+        public StreamHandler NetStreamHandler
         {
             get
             {
@@ -327,20 +329,22 @@ namespace BeetleX.Light.Clients
             }
         }
 
-        private void OnReceive(NetClient client, object msg)
+        protected virtual void OnReceive(NetClient client, object msg)
         {
             try
             {
+                GetLoger(LogLevel.Debug)?.Write(client, "NetClient", "Receive", msg == null ? client.NetStreamHandler.ReadSequenceNetStream.Length.ToString() : msg.ToString());
                 if (msg != null)
                 {
                     if (_messageReceiveHandlers.TryGetValue(msg.GetType(), out var handler))
                     {
+                        GetLoger(LogLevel.Debug)?.Write(client, "NetClient", "Receive", "Handler callback");
                         handler.DynamicInvoke(client, msg);
                         return;
                     }
                 }
                 if (this.Receive != null)
-                    this.Receive(this, StreamHandler, msg);
+                    this.Receive(this, NetStreamHandler, msg);
             }
             catch (Exception e_)
             {
@@ -354,11 +358,13 @@ namespace BeetleX.Light.Clients
             {
                 try
                 {
-                    ProtocolChannel.Decoding(client.StreamHandler, OnReceive);
+                    GetLoger(Logs.LogLevel.Debug)?.Write(this, "NetClient", $"{ProtocolChannel?.Name}Decoding", "");
+                    ProtocolChannel.Decoding(client.NetStreamHandler, OnReceive);
+                   
                 }
                 catch (Exception e_)
                 {
-                    GetLoger(Logs.LogLevel.Error)?.WriteException(this, "NetContext", $"{ProtocolChannel?.Name}ChannelDecoding", e_);
+                    GetLoger(Logs.LogLevel.Error)?.WriteException(this, "NetClient", $"{ProtocolChannel?.Name}Decoding", e_);
                     Disconnect(e_);
                     return;
                 }
@@ -580,7 +586,7 @@ namespace BeetleX.Light.Clients
                     haveData = true;
                     if (msg is IProtocolData dataWriter)
                     {
-                        dataWriter.Write(StreamHandler);
+                        dataWriter.Write(NetStreamHandler);
                     }
                     else
                     {
@@ -596,27 +602,28 @@ namespace BeetleX.Light.Clients
                             try
                             {
 
+                                GetLoger(Logs.LogLevel.Debug)?.Write(this, "NetClient", $"{ProtocolChannel?.Name}Encoding", "");
                                 ProtocolChannel.Context = this;
-                                ProtocolChannel.Encoding(StreamHandler, msg);
+                                ProtocolChannel.Encoding(NetStreamHandler, msg);
 
                                 //this.ProtocolPacket.Encoding(msg, this, DataStream);
                             }
                             catch (Exception e_)
                             {
-                                GetLoger(LogLevel.Error)?.WriteException(this, "NetContext", $"{ProtocolChannel?.Name}ChannelEncoding", e_);
+                                GetLoger(LogLevel.Error)?.WriteException(this, "NetClient", $"{ProtocolChannel?.Name}Encoding", e_);
                                 Disconnect(e_);
                             }
                         }
                     }
                 }
                 if (haveData)
-                    StreamHandler.Flush();
+                    NetStreamHandler.Flush();
                 _sendState = 0;
             }
 
         }
 
-        void IContextClose.Close(Exception e)
+        void INetContext.Close(Exception e)
         {
             Disconnect(e);
         }
