@@ -66,7 +66,6 @@ namespace BeetleX.Light
             return System.Threading.Interlocked.Increment(ref mID);
         }
 
-
         private void OnApplicationConnected(NetContext context)
         {
             try
@@ -180,18 +179,18 @@ namespace BeetleX.Light
                 context.Dispose();
                 return;
             }
-            IProtocolChannel<NetContext> channel = null;
+
             if (context.ProtocolChannel != null)
             {
                 try
                 {
-                    GetLoger(LogLevel.Debug)?.Write(this, "NetContext", $"{context.ProtocolChannel?.Name}Decoding", "");
+                    GetLoger(LogLevel.Debug)?.Write(context, "NetContext", $"{context.ProtocolChannel?.Name}Decoding", "");
                     context.ProtocolChannel.Decoding(context.NetStreamHandler, OnReceive);
 
                 }
                 catch (Exception e_)
                 {
-                    GetLoger(Logs.LogLevel.Error)?.WriteException(context, "NetContext", $"{channel?.Name}Decoding", e_);
+                    GetLoger(Logs.LogLevel.Error)?.WriteException(context, "NetContext", $"{context.ProtocolChannel?.Name}Decoding", e_);
                     context.Dispose();
                     return;
                 }
@@ -201,7 +200,6 @@ namespace BeetleX.Light
                 OnReceive(context, null);
             }
         }
-
 
         private async Task StartNetContext(NetContext context)
         {
@@ -223,15 +221,16 @@ namespace BeetleX.Light
                             context.FirstReceive = false;
                             var syncTask = context.NetSslStream.SyncData<NetContext>(context, c =>
                             {
+
                                 OnProtocolProcess(c);
+
                             });
                         }
                     }
                 }
-                catch (BXException bxe)
+                catch (Exception bxe)
                 {
-                    GetLoger(Logs.LogLevel.Error)?.WriteException(c, "NetContext", "SessionReceive", bxe);
-                    c.Dispose();
+                    GetLoger(Logs.LogLevel.Debug)?.WriteException(c, "NetContext", "SessionReceive", bxe);
                 }
             });
             await Task.WhenAll(reviceTask, sendTask);
@@ -324,6 +323,7 @@ namespace BeetleX.Light
             OnDisplayLogo();
             Application.Started(this);
         }
+
         private void OnDisplayLogo()
         {
             AssemblyCopyrightAttribute productAttr = typeof(BeetleX.Light.BXException).Assembly.GetCustomAttribute<AssemblyCopyrightAttribute>();
@@ -354,6 +354,7 @@ namespace BeetleX.Light
             logo += " -----------------------------------------------------------------------------------------\r\n";
             GetLoger(LogLevel.Off)?.Write(this, "NetServer", "Start", logo);
         }
+
         private void TryUnhandledException()
         {
             GetLoger(LogLevel.Off)?.Write(this, "NetServer", "Start", "Try unhandled exception...");

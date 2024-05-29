@@ -67,7 +67,9 @@ namespace BeetleX.Light.Memory
 
         public void ReaderAdvanceTo()
         {
+
             _PipeReader.AdvanceTo(_ReadBuffer.Start, _ReadBuffer.End);
+
         }
 
         public void TestLoad()
@@ -230,11 +232,13 @@ namespace BeetleX.Light.Memory
 
         public override int Read(byte[] buffer, int offset, int count)
         {
+            if (Length == 0)
+                return 0;
             if (buffer.Length == 0)
                 return 0;
             if (Length > count)
             {
-                _ReadBuffer.CopyTo(new Span<byte>(buffer, offset, count));
+                _ReadBuffer.Slice(0, count).CopyTo(new Span<byte>(buffer, offset, count));
                 ReadAdvance(count);
                 return count;
             }

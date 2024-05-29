@@ -122,8 +122,8 @@ namespace BeetleX.Light
                 try
                 {
                     int bytesRead = await Socket.ReceiveAsync(memory, SocketFlags.None);
-                    Server.GetLoger(LogLevel.Debug)?.Write(this, "NetContext", "ReceiveData", $"Length {bytesRead}");
-                    Server.GetLoger(LogLevel.Trace)?.Write(this, "NetContext", "✉ ReceiveData", $"{Convert.ToHexString(memory.Slice(0, bytesRead).Span)}");
+                    Server?.GetLoger(LogLevel.Debug)?.Write(this, "NetContext", "ReceiveData", $"Length {bytesRead}");
+                    Server?.GetLoger(LogLevel.Trace)?.Write(this, "NetContext", "✉ ReceiveData", $"{Convert.ToHexString(memory.Slice(0, bytesRead).Span)}");
                     if (bytesRead == 0)
                     {
                         GetLoger(LogLevel.Info)?.Write(this, "NetContext", "ReceiveData", $"receive data is 0");
@@ -163,8 +163,8 @@ namespace BeetleX.Light
                     while (buffer.Length > 0)
                     {
                         var len = await Socket.SendAsync(buffer.First);
-                        Server.GetLoger(LogLevel.Debug)?.Write(this, "NetContext", "SendData", $"Length {len}");
-                        Server.GetLoger(LogLevel.Trace)?.Write(this, "NetContext", "✉ SendData", $"{Convert.ToHexString(buffer.FirstSpan.Slice(0, len))}");
+                        Server?.GetLoger(LogLevel.Debug)?.Write(this, "NetContext", "SendData", $"Length {len}");
+                        Server?.GetLoger(LogLevel.Trace)?.Write(this, "NetContext", "✉ SendData", $"{Convert.ToHexString(buffer.FirstSpan.Slice(0, len))}");
                         buffer = buffer.Slice(len);
                     }
                     reader.AdvanceTo(buffer.End);
@@ -172,7 +172,7 @@ namespace BeetleX.Light
 
                 catch (Exception e_)
                 {
-                    Server.GetLoger(Logs.LogLevel.Error)?.WriteException(this, "NetContext", "ReceiveSend", e_);
+                    Server?.GetLoger(Logs.LogLevel.Error)?.WriteException(this, "NetContext", "ReceiveSend", e_);
                     break;
                 }
                 if (result.IsCompleted)

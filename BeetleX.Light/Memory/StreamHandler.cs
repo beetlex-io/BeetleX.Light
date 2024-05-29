@@ -282,7 +282,14 @@ namespace BeetleX.Light.Memory
 
         public int Read(byte[] buffer, int offset, int count)
         {
-            return Read(buffer, offset, count);
+            if (ReadSequenceNetStream != null)
+            {
+              return  ((Stream)ReadSequenceNetStream).Read(buffer, offset, count);
+            }
+            else
+            {
+                return Stream.Read(buffer, offset, count);
+            }
         }
 
         #region int16
@@ -466,18 +473,6 @@ namespace BeetleX.Light.Memory
             }
         }
 
-        [ThreadStatic]
-        static MemoryStream _memoryStream;
-
-        public MemoryStream GetTempMemoryStream()
-        {
-            if (_memoryStream == null)
-            {
-                _memoryStream = new InnerStream();
-            }
-            _memoryStream.SetLength(0);
-            return _memoryStream;
-        }
 
         public bool TryReadBinaryObject(HeaderSizeType type, out object result, Func<ReadOnlyMemory<byte>, object> handler)
         {
@@ -563,22 +558,41 @@ namespace BeetleX.Light.Memory
             }
             else
             {
-                Stream stream = GetTempMemoryStream();
-                handler?.Invoke(stream, msg);
-                if (type == HeaderSizeType.Short)
+                using (var poolMemoryStream = ObjectPoolFactory<PoolMemoryStream>.Default.Get())
                 {
-                    WriteUInt16((UInt16)stream.Length);
+                    Stream stream = poolMemoryStream.Data;
+                    handler?.Invoke(stream, msg);
+                    if (type == HeaderSizeType.Short)
+                    {
+                        WriteUInt16((UInt16)stream.Length);
+                    }
+                    else
+                    {
+                        WriteUInt((UInt32)stream.Length);
+                    }
+                    stream.Position = 0;
+                    stream.CopyTo(Stream);
                 }
-                else
-                {
-                    WriteUInt((UInt32)stream.Length);
-                }
-                stream.Position = 0;
-                stream.CopyTo(Stream);
-
 
             }
 
+        }
+
+        public int ReadByte()
+        {
+            if (ReadSequenceNetStream != null)
+            {
+                return ((Stream)ReadSequenceNetStream).ReadByte();
+            }
+            else
+            {
+                return Stream.ReadByte();
+            }
+        }
+
+        public void WriteByte(byte value)
+        {
+            Stream.WriteByte(value);
         }
     }
 

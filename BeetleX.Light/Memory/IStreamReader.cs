@@ -45,5 +45,7 @@ namespace BeetleX.Light.Memory
         object ReadBinaryObject(HeaderSizeType type, Func<ReadOnlyMemory<byte>, object> handler);
 
         int Read(byte[] buffer, int offset, int count);
+
+        int ReadByte();
     }
 }

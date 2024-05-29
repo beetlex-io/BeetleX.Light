@@ -1,5 +1,6 @@
 ﻿using BeetleX.Light.Dispatchs;
 using BeetleX.Light.Logs;
+using BeetleX.Light.Memory;
 using BeetleX.Light.Protocols;
 using Microsoft.VisualBasic;
 using System;
@@ -79,7 +80,7 @@ namespace BeetleX.Light.UDP
             return this;
         }
 
-        public bool LittleEndian { get; set; } =true;
+        public bool LittleEndian { get; set; } = true;
         public IUdpProtocolChannel ProtocolChannel { get; set; }
 
         public void SetProtocolChannel<T>()
@@ -288,7 +289,7 @@ namespace BeetleX.Light.UDP
                     catch (Exception e_)
                     {
                         GetLoger(LogLevel.Error)?.WriteException(data.RemoteEndPoint, "UdpServer", $"ChannelDecoding", e_);
-
+                        return;
                     }
                 }
 
@@ -365,20 +366,24 @@ namespace BeetleX.Light.UDP
                 {
                     if (ProtocolChannel != null)
                     {
-                        var stream = GetTempMemoryStream();
-                        try
+                        using (var poolStream = ObjectPoolFactory<PoolMemoryStream>.Default.Get())
                         {
-                            ProtocolChannel.Write(stream, message, LittleEndian);
-                            GetLoger(LogLevel.Debug)?.Write(point, "UdpServer", $"ChannelEncoding", message.ToString());
+                            var stream = poolStream.Data;
+                            try
+                            {
+                                ProtocolChannel.Write(stream, message, LittleEndian);
+                                GetLoger(LogLevel.Debug)?.Write(point, "UdpServer", $"ChannelEncoding", message.ToString());
+                            }
+                            catch (Exception e_)
+                            {
+                                GetLoger(LogLevel.Error)?.WriteException(point, "UdpServer", $"ChannelEncoding", e_);
+                                return;
+                            }
+
+                            var buffer = stream.GetBuffer();
+                            memory = new Memory<byte>(buffer, 0, (int)stream.Length);
+                            await Socket.SendToAsync(memory, point);
                         }
-                        catch (Exception e_)
-                        {
-                            GetLoger(LogLevel.Error)?.WriteException(point, "UdpServer", $"ChannelEncoding", e_);
-                            return;
-                        }
-                        var buffer = stream.GetBuffer();
-                        memory = new Memory<byte>(buffer, 0, (int)stream.Length);
-                        await Socket.SendToAsync(memory, point);
                         GetLoger(LogLevel.Debug)?.Write(point, "UdpServer", "SendData", $"Length {memory.Length}");
                         GetLoger(LogLevel.Trace)?.Write(point, "UdpServer", "✉ SendData", $"{Convert.ToHexString(memory.Span)}");
                     }

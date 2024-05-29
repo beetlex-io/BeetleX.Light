@@ -75,7 +75,7 @@ namespace BeetleX.Light.Memory
                 return 0;
             if (Length > count)
             {
-                ReadOnlySequenceAdapter.ReadOnlySequence.CopyTo(new Span<byte>(buffer, offset, count));
+                ReadOnlySequenceAdapter.ReadOnlySequence.Slice(0, count).CopyTo(new Span<byte>(buffer, offset, count));
                 ReadAdvance(count);
                 return count;
             }
