@@ -45,6 +45,8 @@ namespace BeetleX.Light
 
         public INetServer Server { get; internal set; }
 
+        public SocketError SocketErrorCode { get; set; } = SocketError.Success;
+
         public ListenHandler ListenHandler { get; set; }
 
         public bool TLS { get; internal set; } = false;
@@ -132,9 +134,15 @@ namespace BeetleX.Light
                     }
                     writer.Advance(bytesRead);
                 }
+                catch (SocketException sockErr)
+                {
+                    this.SocketErrorCode = sockErr.SocketErrorCode;
+                    Server?.GetLoger(Logs.LogLevel.Warring)?.WriteException(this, "NetContext", "ReceiveData", sockErr);
+                    break;
+                }
                 catch (Exception ex)
                 {
-                    Server?.GetLoger(Logs.LogLevel.Error)?.WriteException(this, "NetContext", "ReceiveData", ex);
+                    Server?.GetLoger(Logs.LogLevel.Warring)?.WriteException(this, "NetContext", "ReceiveData", ex);
                     break;
                 }
                 FlushResult result = await writer.FlushAsync();
@@ -169,10 +177,15 @@ namespace BeetleX.Light
                     }
                     reader.AdvanceTo(buffer.End);
                 }
-
+                catch (SocketException sockErr)
+                {
+                    this.SocketErrorCode = sockErr.SocketErrorCode;
+                    Server?.GetLoger(Logs.LogLevel.Warring)?.WriteException(this, "NetContext", "SendData", sockErr);
+                    break;
+                }
                 catch (Exception e_)
                 {
-                    Server?.GetLoger(Logs.LogLevel.Error)?.WriteException(this, "NetContext", "ReceiveSend", e_);
+                    Server?.GetLoger(Logs.LogLevel.Warring)?.WriteException(this, "NetContext", "SendData", e_);
                     break;
                 }
                 if (result.IsCompleted)
@@ -204,7 +217,7 @@ namespace BeetleX.Light
                         NetStream?.Dispose();
                         ProtocolChannel?.Dispose();
                         ListenHandler.CloseSocket(Socket);
-                        GetLoger(LogLevel.Debug)?.Write(this, "NetContext", "\u2714 Disposed", $"");
+                        GetLoger(LogLevel.Info)?.Write(this, "NetContext", "\u2714 Disposed", $"");
                     }
                     catch (Exception e_)
                     {

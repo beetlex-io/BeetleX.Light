@@ -578,6 +578,18 @@ namespace BeetleX.Light.Memory
 
         }
 
+        public void Clear(int len = 0)
+        {
+            if (len == 0)
+            {
+                ReadSequenceNetStream.ReadAdvance(Length);
+            }
+            else
+            {
+                ReadSequenceNetStream.ReadAdvance(len);
+            }
+        }
+
         public int ReadByte()
         {
             if (ReadSequenceNetStream != null)

@@ -605,5 +605,19 @@ namespace BeetleX.Light.Memory
             }
             return null;
         }
+
+        public static void ReadTo(this Stream _buffer, Stream target, int count)
+        {
+            using (var buffer = MemoryPool<byte>.Shared.Rent(1024 * 8))
+            {
+                while (count > 0)
+                {
+                    var len = _buffer.Read(buffer.Memory.Span);
+                    target.Write(buffer.Memory.Span.Slice(0, len));
+                    count -= len;
+                }
+
+            }
+        }
     }
 }

@@ -132,7 +132,7 @@ namespace BeetleX.Light.Memory
                     _end = null;
                 }
                 _readOnlySequence = default;
-                LogHandler?.GetLoger(LogLevel.Debug)?.Write(LogHandler, "SequenceAdapter", "\u2714 Disposed", "");
+                LogHandler?.GetLoger(LogLevel.Info)?.Write(LogHandler, "SequenceAdapter", "\u2714 Disposed", "");
             }
             catch (Exception e_)
             {

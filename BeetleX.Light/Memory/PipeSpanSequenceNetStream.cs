@@ -291,7 +291,7 @@ namespace BeetleX.Light.Memory
                     _socketWritePipe.Reader.CancelPendingRead();
                     _socketWritePipe.Reader.Complete();
                     _socketWritePipe.Writer.Complete();
-                    LogHandler?.GetLoger(LogLevel.Debug)?.Write(LogHandler, "PipStream", "\u2714 Disposed", "");
+                    LogHandler?.GetLoger(LogLevel.Info)?.Write(LogHandler, "PipStream", "\u2714 Disposed", "");
                 }
                 catch (Exception e_)
                 {

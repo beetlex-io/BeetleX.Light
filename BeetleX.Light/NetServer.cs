@@ -131,13 +131,13 @@ namespace BeetleX.Light
                     netContext.ID = GetID();
                     _userContexts[netContext.ID] = netContext;
                     OnApplicationConnected(netContext);
-                    GetLoger(LogLevel.Debug)?.Write(netContext, "NetServer", "✔ NetContext", $"Connected");
+                    GetLoger(LogLevel.Info)?.Write(netContext, "NetServer", "✔ NetContext", $"Connected");
                     OnSessionConnect(netContext);
-                    await StartNetContext(netContext);
+                    var task = StartNetContext(netContext);
                 }
                 else
                 {
-                    GetLoger(LogLevel.Debug)?.Write(item.Item1, "NetServer", "NetContext", $"Cancel");
+                    GetLoger(LogLevel.Warring)?.Write(item.Item1, "NetServer", "NetContext", $"Cancel");
                     ListenHandler.CloseSocket(item.Item1);
                 }
             }
@@ -147,12 +147,7 @@ namespace BeetleX.Light
             }
             finally
             {
-                if (netContext != null)
-                {
-                    _userContexts.TryRemove(netContext.ID, out netContext);
-                    OnApplicationDisconnect(netContext);
-                    netContext?.Dispose();
-                }
+
             }
         }
 
@@ -174,7 +169,7 @@ namespace BeetleX.Light
         {
             if (context.NetStream.Length > context.ListenHandler.MaxProtocolPacketSize)
             {
-                GetLoger(Logs.LogLevel.Error)?.WriteException(context, "NetContext", "SessionReceive",
+                GetLoger(Logs.LogLevel.Warring)?.WriteException(context, "NetContext", "SessionReceive",
                     new BXException($"Network data has overflowed the MaxProtocolPacketSize length"));
                 context.Dispose();
                 return;
@@ -230,10 +225,16 @@ namespace BeetleX.Light
                 }
                 catch (Exception bxe)
                 {
-                    GetLoger(Logs.LogLevel.Debug)?.WriteException(c, "NetContext", "SessionReceive", bxe);
+                    GetLoger(Logs.LogLevel.Warring)?.WriteException(c, "NetContext", "SessionReceive", bxe);
                 }
             });
             await Task.WhenAll(reviceTask, sendTask);
+            if (context != null)
+            {
+                _userContexts.TryRemove(context.ID, out context);
+                OnApplicationDisconnect(context);
+                context?.Dispose();
+            }
         }
 
         private void SslAuthenticateAsyncCallback(IAsyncResult ar)
@@ -303,7 +304,7 @@ namespace BeetleX.Light
             catch { }
         }
 
-        public void Start()
+        public virtual void Start()
         {
             TryUnhandledException();
             StartArgs = CommandLineParser.GetOption<StartArgs>();

@@ -59,7 +59,7 @@ namespace BeetleX.Light.Memory
 
         internal ObjectPoolFactory<T> Factory { get; set; }
         public T Data { get; internal set; }
-        void IDisposable.Dispose()
+        public void Dispose()
         {
             Factory.Return(this);
         }

@@ -260,7 +260,7 @@ namespace BeetleX.Light.Clients
                     ProtocolChannel?.Dispose();
                     NetStream.SendReader.CancelPendingRead();
                     Connected = false;
-                    GetLoger(LogLevel.Debug)?.Write(this, "NetClient", "\u2714 Disconnect", $"");
+                    GetLoger(LogLevel.Info)?.Write(this, "NetClient", "\u2714 Disconnect", $"");
 
                 }
                 catch (Exception e_)

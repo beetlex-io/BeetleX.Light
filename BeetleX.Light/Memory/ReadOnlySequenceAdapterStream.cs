@@ -164,7 +164,7 @@ namespace BeetleX.Light.Memory
                 try
                 {
                     ReadOnlySequenceAdapter.Dispose();
-                    LogHandler?.GetLoger(LogLevel.Debug)?.Write(LogHandler, "SequenceStream", "\u2714 Disposed", "");
+                    LogHandler?.GetLoger(LogLevel.Info)?.Write(LogHandler, "SequenceStream", "\u2714 Disposed", "");
                 }
                 catch (Exception e_)
                 {

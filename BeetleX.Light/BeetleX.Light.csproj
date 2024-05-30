@@ -10,7 +10,7 @@
     <Authors>henryfan</Authors>
     <Company>BeetleX</Company>
     <PackageOutputPath>E:\public</PackageOutputPath>
-    <Version>0.8.24.0529</Version>
+    <Version>0.8.24.0530</Version>
     <RepositoryUrl>https://github.com/beetlex-io/BeetleX.Light</RepositoryUrl>
     <PackageProjectUrl>https://github.com/beetlex-io/BeetleX.Light</PackageProjectUrl>
   </PropertyGroup>
