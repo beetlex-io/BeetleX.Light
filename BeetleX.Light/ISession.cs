@@ -16,7 +16,7 @@ namespace BeetleX.Light
 
         AuthenticationType Authentication { get; set; }
 
-        void Receive(NetContext context, StreamHandler stream, object message);
+        void Receive(NetContext context, object message);
 
         void Dispose(NetContext context);
 
@@ -37,7 +37,7 @@ namespace BeetleX.Light
 
         }
 
-        public virtual void Receive(NetContext context, StreamHandler stream, object message)
+        public virtual void Receive(NetContext context, object message)
         {
         }
     }

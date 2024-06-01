@@ -19,7 +19,6 @@ await Task.Delay(1000);
 
 AwaiterNetClient<JsonChannel<NetClient>> client = "tcp://127.0.0.1:8090";
 client.SslServiceName = "beetlex-io.com";
-client.SetProtocolChannel<JsonChannel<NetClient>>();
 client.AddLogOutputHandler<LogOutputToConsole>();
 client.LogLevel = LogLevel.Trace;
 client.TimeOut = 1000000;
@@ -36,7 +35,7 @@ Console.ReadLine();
 
 public class UserSession : SesionBase
 {
-    public override void Receive(NetContext context, StreamHandler stream, object message)
+    public override void Receive(NetContext context, object message)
     {
         if (message is Register reg)
         {
@@ -85,7 +84,7 @@ public class JsonChannel<T> : IProtocolChannel<T>
                         Context.GetLoger(LogLevel.Error)?.WriteException(Context, "JsonChannel", "Decoding", ex);
                         Context.Close(ex);
                     }
-                    return JsonSerializer.Deserialize(memory.Span.Slice(type.BUffersLength), type.MessageType);
+                    return JsonSerializer.Deserialize(memory.Span.Slice(type.BuffersLength), type.MessageType);
                 })
                )
         {

@@ -64,8 +64,10 @@ namespace BeetleX.Light.Memory
                 }
             }
         }
-        public async Task SyncData<T>(T context, Action<T> completed)
-            where T : IGetLogHandler, ILocation, INetContext
+
+        internal Action<INetContext> SyncDataCompleted { get; set; }
+        public async Task SyncData<T>(T context)
+            where T : INetContext
         {
             while (true)
             {
@@ -79,13 +81,10 @@ namespace BeetleX.Light.Memory
                         context.GetLoger(Logs.LogLevel.Trace)?.Write(context, "BXSslStream", "✉ SyncData", $"Read {Convert.ToHexString(memory.Slice(0, len).Span)}");
                         OnlySequenceAdapterStream.WriteAdvance(len);
                         OnlySequenceAdapterStream.Flush();
-                        ((PipeSpanSequenceNetStream)InnerStream).ReaderAdvanceTo();
-
-                        completed(context);
+                        SyncDataCompleted(context);
                     }
                     else
                     {
-                        ((PipeSpanSequenceNetStream)InnerStream).ReaderAdvanceTo();
                         await Task.Delay(Constants.ReceiveZeroDelayTime);
                         if (!_disposed)
                         {

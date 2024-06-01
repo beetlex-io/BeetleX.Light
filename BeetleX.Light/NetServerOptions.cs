@@ -16,8 +16,10 @@ namespace BeetleX.Light
             {
                 listen.Port = 8090;
             });
+            IOQueues = Environment.ProcessorCount > 8 ? 8 : Environment.ProcessorCount;
         }
 
+        public int IOQueues { get; set; }
         public int SessionDisposeDelay { get; set; } = 2000;
         public LogLevel LogLevel { get; set; } = LogLevel.Info;
 

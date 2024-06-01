@@ -77,7 +77,11 @@ namespace BeetleX.Light.Memory
             }
             return 0;
         }
-
+        public void Clear(int len = 0)
+        {
+            var buffer = ReadSequenceNetStream.GetReadOnlySequence();
+            ReadSequenceNetStream.ReadAdvance(buffer.Length);
+        }
         public string ReadString(Encoding coding = null, int length = 0)
         {
             coding = coding ?? Encoding.UTF8;
@@ -284,7 +288,7 @@ namespace BeetleX.Light.Memory
         {
             if (ReadSequenceNetStream != null)
             {
-              return  ((Stream)ReadSequenceNetStream).Read(buffer, offset, count);
+                return ((Stream)ReadSequenceNetStream).Read(buffer, offset, count);
             }
             else
             {
@@ -576,18 +580,6 @@ namespace BeetleX.Light.Memory
 
             }
 
-        }
-
-        public void Clear(int len = 0)
-        {
-            if (len == 0)
-            {
-                ReadSequenceNetStream.ReadAdvance(Length);
-            }
-            else
-            {
-                ReadSequenceNetStream.ReadAdvance(len);
-            }
         }
 
         public int ReadByte()

@@ -10,6 +10,10 @@ namespace BeetleX.Light
     {
         public static int StackMaxSize = 1024;
 
-        public static int ReceiveZeroDelayTime = 2000;
+        public static int ReceiveZeroDelayTime = 3000;
+
+        public static int MemorySegmentMinSize = 1024 * 4;
+
+        public static int MemorySegmentMaxSize = 1024 * 4;
     }
 }

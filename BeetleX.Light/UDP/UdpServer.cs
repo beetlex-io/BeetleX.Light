@@ -306,7 +306,7 @@ namespace BeetleX.Light.UDP
             }
         }
 
-        public void Write(LogLevel level, int threadid, string location, string model, string tag, string message, string stackTrace)
+        public void WriteLog(LogLevel level, int threadid, string location, string model, string tag, string message, string stackTrace)
         {
             try
             {

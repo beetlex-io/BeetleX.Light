@@ -10,6 +10,7 @@ using System.Net.Sockets;
 using System.Reflection.Metadata.Ecma335;
 using System.Text;
 using System.Threading.Tasks;
+using static BeetleX.Light.Memory.ReadOnlySequenceAdapter;
 
 namespace BeetleX.Light.Memory
 {
@@ -20,7 +21,6 @@ namespace BeetleX.Light.Memory
         {
 
             this.ReadOnlySequenceAdapter = new ReadOnlySequenceAdapter();
-            this.ReadOnlySequenceAdapter.SegmentMinSize = 1024 * 4;
             this.ReadOnlySequenceAdapter.LogHandler = this;
         }
 
@@ -49,7 +49,10 @@ namespace BeetleX.Light.Memory
         {
             this.ReadOnlySequenceAdapter.Flush();
         }
-
+        internal MemoryBlock FlushReturn()
+        {
+            return this.ReadOnlySequenceAdapter.FlushReturn();
+        }
         public ReadOnlySequence<byte> GetReadOnlySequence()
         {
             return ReadOnlySequenceAdapter.ReadOnlySequence;
@@ -124,13 +127,24 @@ namespace BeetleX.Light.Memory
 
         public override void Write(byte[] buffer, int offset, int count)
         {
-            var memory = ReadOnlySequenceAdapter.GetSpan(count);
+
             Span<byte> span = new Span<byte>(buffer, offset, count);
-            span.CopyTo(memory);
-            WriteAdvance(count);
+            while (count > 0)
+            {
+                var memory = ReadOnlySequenceAdapter.GetSpan(count);
+                span.Slice(0, memory.Length).CopyTo(memory);
+                WriteAdvance(memory.Length);
+                span = span.Slice(memory.Length);
+                count -= memory.Length;
+            }
+
         }
 
 
+        public Task FlushToSocket(Socket socket)
+        {
+            return Task.CompletedTask;
+        }
 
         public Span<byte> GetWriteSpan(int count)
         {
@@ -163,7 +177,7 @@ namespace BeetleX.Light.Memory
             {
                 try
                 {
-                    ReadOnlySequenceAdapter.Dispose();
+                    ReadOnlySequenceAdapter?.Dispose();
                     LogHandler?.GetLoger(LogLevel.Info)?.Write(LogHandler, "SequenceStream", "\u2714 Disposed", "");
                 }
                 catch (Exception e_)
@@ -180,85 +194,6 @@ namespace BeetleX.Light.Memory
 
         public Socket Socket { get; set; }
         public EndPoint EndPoint { get => LogHandler?.EndPoint; set => throw new NotImplementedException(); }
-
-        public override IAsyncResult BeginRead(byte[] buffer, int offset, int size, AsyncCallback callback, object state)
-        {
-            if (buffer == null)
-            {
-                throw new ArgumentNullException("buffer");
-            }
-            if (offset < 0 || offset > buffer.Length)
-            {
-                throw new ArgumentOutOfRangeException("offset");
-            }
-            if (size < 0 || size > buffer.Length - offset)
-            {
-                throw new ArgumentOutOfRangeException("size");
-            }
-            Socket streamSocket = Socket;
-            if (streamSocket == null)
-            {
-                throw new BXException("SpanSequenceNetStream Socket is null!");
-            }
-            IAsyncResult asyncResult = streamSocket.BeginReceive(buffer, offset, size, SocketFlags.None, callback, state);
-            return asyncResult;
-        }
-
-        public override int EndRead(IAsyncResult asyncResult)
-        {
-            if (asyncResult == null)
-            {
-                throw new ArgumentNullException("asyncResult");
-            }
-            Socket streamSocket = Socket;
-            if (streamSocket == null)
-            {
-                throw new BXException("SpanSequenceNetStream Socket is null!");
-            }
-
-            int num = streamSocket.EndReceive(asyncResult);
-            return num;
-        }
-
-        public override IAsyncResult BeginWrite(byte[] buffer, int offset, int size, AsyncCallback callback, object state)
-        {
-
-            if (buffer == null)
-            {
-                throw new ArgumentNullException("buffer");
-            }
-            if (offset < 0 || offset > buffer.Length)
-            {
-                throw new ArgumentOutOfRangeException("offset");
-            }
-            if (size < 0 || size > buffer.Length - offset)
-            {
-                throw new ArgumentOutOfRangeException("size");
-            }
-            Socket streamSocket = Socket;
-            if (streamSocket == null)
-            {
-                throw new BXException("SpanSequenceNetStream Socket is null!");
-            }
-            IAsyncResult asyncResult = streamSocket.BeginSend(buffer, offset, size, SocketFlags.None, callback, state);
-            return asyncResult;
-
-        }
-
-        public override void EndWrite(IAsyncResult asyncResult)
-        {
-
-            if (asyncResult == null)
-            {
-                throw new ArgumentNullException("asyncResult");
-            }
-            Socket streamSocket = Socket;
-            if (streamSocket == null)
-            {
-                throw new BXException("SpanSequenceNetStream Socket is null!");
-            }
-            streamSocket.EndSend(asyncResult);
-        }
 
         public LogWriter? GetLoger(LogLevel type)
         {

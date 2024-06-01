@@ -12,48 +12,30 @@ using System.Reflection.PortableExecutable;
 using System.Runtime.Intrinsics.X86;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Dataflow;
+using static BeetleX.Light.Memory.ReadOnlySequenceAdapter;
 
 namespace BeetleX.Light.Memory
 {
     public class PipeSpanSequenceNetStream : Stream, ISpanSequenceNetStream
     {
 
-        private static PipeOptions _pipeOptions = null;
-        public static PipeOptions PipeOptions
-        {
-            get
-            {
-                return _pipeOptions ?? PipeOptions.Default;
-            }
-            set
-            {
-                _pipeOptions = value;
-            }
-        }
         public PipeSpanSequenceNetStream(Socket socket)
         {
             _Socket = socket;
-            _socketReadPipe = new Pipe(PipeOptions);
-            _socketWritePipe = new Pipe(PipeOptions);
-            _PipeReader = _socketReadPipe.Reader;
-            _PipeWriter = _socketWritePipe.Writer;
+            WriteSocketStream = new ReadOnlySequenceAdapterStream();
+            ReadSoecketStream = new ReadOnlySequenceAdapterStream();
+            _onlySequenceAdapter = ReadSoecketStream.ReadOnlySequenceAdapter;
         }
 
-        private Pipe _socketReadPipe;
-
-        private Pipe _socketWritePipe;
 
         private Socket _Socket;
 
-        private PipeReader _PipeReader;
+        internal ReadOnlySequenceAdapterStream WriteSocketStream { get; set; }
 
-        private PipeWriter _PipeWriter;
+        internal ReadOnlySequenceAdapterStream ReadSoecketStream { get; set; }
 
-        private ReadOnlySequence<byte> _ReadBuffer;
-
-        public PipeWriter ReceiveWriter => _socketReadPipe.Writer;
-
-        public PipeReader SendReader => _socketWritePipe.Reader;
+        private ReadOnlySequenceAdapter _onlySequenceAdapter;
 
         public override bool CanRead => true;
 
@@ -61,22 +43,13 @@ namespace BeetleX.Light.Memory
 
         public override bool CanWrite => true;
 
-        public override long Length => _ReadBuffer.Length;
+        public override long Length => ReadSoecketStream.Length;
 
         public override long Position { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 
-        public void ReaderAdvanceTo()
-        {
-
-            _PipeReader.AdvanceTo(_ReadBuffer.Start, _ReadBuffer.End);
-
-        }
-
         public void TestLoad()
         {
-            var result = _PipeReader.ReadAsync().AsTask();
-            result.Wait();
-            _ReadBuffer = result.Result.Buffer;
+
         }
 
         public bool IsSsl { get; set; }
@@ -85,57 +58,50 @@ namespace BeetleX.Light.Memory
 
         public IGetLogHandler LogHandler { get; set; }
 
-        public async ValueTask ReadSocketData<T>(T context, Action<T> callBack)
-            where T : ILocation, IGetLogHandler, INetContext
+        internal Action<INetContext> FlushReadSocketStreamCompleted { get; set; }
+
+        public void FlushReadSocketStream<T>(T context)
+             where T : INetContext
         {
-            while (true)
+            ReadSoecketStream.Flush();
+            try
             {
-                try
+                var reader = _onlySequenceAdapter.ReadOnlySequence;
+                if (reader.Length > 0)
                 {
-                    ReadResult result = await _PipeReader.ReadAsync();
-                    _ReadBuffer = result.Buffer;
-                    if (_ReadBuffer.Length > 0)
+                    if (_readCompletionSource != null)
                     {
-                        if (_readCompletionSource != null)
+                        var memory = _readCompletionSource.Buffer;
+                        int len = 0;
+                        if (reader.Length >= _readCompletionSource.Buffer.Length)
                         {
-                            var memory = _readCompletionSource.Buffer;
-                            int len = 0;
-                            if (_ReadBuffer.Length >= _readCompletionSource.Buffer.Length)
-                            {
-                                len = memory.Length;
-                                _ReadBuffer.Slice(0, memory.Length).CopyTo(memory.Span);
-                                ReadAdvance(memory.Length);
-                            }
-                            else
-                            {
-                                len = (int)_ReadBuffer.Length;
-                                _ReadBuffer.Slice(0, _ReadBuffer.Length).CopyTo(memory.Span);
-                                ReadAdvance(_ReadBuffer.Length);
-                            }
-                            var comp = _readCompletionSource;
-                            _readCompletionSource = null;
-                            comp.TrySetResult(len);
+                            len = memory.Length;
+                            reader.Slice(0, memory.Length).CopyTo(memory.Span);
+                            ReadAdvance(memory.Length);
                         }
                         else
-                            callBack(context);
+                        {
+                            len = (int)reader.Length;
+                            reader.Slice(0, reader.Length).CopyTo(memory.Span);
+                            ReadAdvance(len);
+                        }
+                        var comp = _readCompletionSource;
+                        _readCompletionSource = null;
+                        comp.TrySetResult(len);
                     }
                     else
-                    {
-                        break;
-                    }
-                    if (result.IsCompleted)
-                    {
-                        break;
-                    }
+                        FlushReadSocketStreamCompleted(context);
                 }
-                catch (Exception e_)
+                else
                 {
-                    context.GetLoger(Logs.LogLevel.Debug)?.WriteException(context, "PipSequenceStream", "ReadData", e_);
-                    context.Close(e_);
-                    break;
+                    return;
                 }
             }
-            //            LogHandler?.GetLoger(LogLevel.Debug)?.Write(LogHandler, "PipSequenceStream", "ReadData", "completed");
+            catch (Exception e_)
+            {
+                context.GetLoger(Logs.LogLevel.Debug)?.WriteException(context, "PipSequenceStream", "FlushReadSocketData", e_);
+                context.Close(e_);
+            }
         }
 
         public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default(CancellationToken))
@@ -165,18 +131,19 @@ namespace BeetleX.Light.Memory
                 {
                     int result = 0;
                     _readCompletionSource = null;
-                    if (_ReadBuffer.Length >= buffer.Length)
+                    var reader = _onlySequenceAdapter.ReadOnlySequence;
+                    if (reader.Length >= buffer.Length)
                     {
                         result = buffer.Length;
-                        _ReadBuffer.Slice(0, buffer.Length).CopyTo(buffer.Span);
+                        reader.Slice(0, buffer.Length).CopyTo(buffer.Span);
                         ReadAdvance(buffer.Length);
 
                     }
                     else
                     {
-                        result = (int)_ReadBuffer.Length;
-                        _ReadBuffer.Slice(0, _ReadBuffer.Length).CopyTo(buffer.Span);
-                        ReadAdvance(_ReadBuffer.Length);
+                        result = (int)reader.Length;
+                        reader.Slice(0, reader.Length).CopyTo(buffer.Span);
+                        ReadAdvance(reader.Length);
                     }
                     return result;
                 }
@@ -204,17 +171,24 @@ namespace BeetleX.Light.Memory
             return base.Read(buffer);
         }
 
+        internal Action<MemoryBlock> FlushCompleted { get; set; }
+
         public override void Flush()
         {
-            _PipeWriter.FlushAsync();
+            //WriteSocketStream.Flush();
+            var result = WriteSocketStream.FlushReturn();
+            FlushCompleted(result);
 
         }
 
+
+
         public override int ReadByte()
         {
-            if (_ReadBuffer.Length == 0)
+            var reader = _onlySequenceAdapter.ReadOnlySequence;
+            if (reader.Length == 0)
                 return -1;
-            int result = _ReadBuffer.FirstSpan[0];
+            int result = reader.FirstSpan[0];
             ReadAdvance(1);
             return result;
         }
@@ -224,7 +198,8 @@ namespace BeetleX.Light.Memory
             data = default;
             if (Length > count)
             {
-                data = _ReadBuffer.Slice(0, count);
+                var reader = _onlySequenceAdapter.ReadOnlySequence;
+                data = reader.Slice(0, count);
                 return true;
             }
             return false;
@@ -236,16 +211,17 @@ namespace BeetleX.Light.Memory
                 return 0;
             if (buffer.Length == 0)
                 return 0;
+            var reader = _onlySequenceAdapter.ReadOnlySequence;
             if (Length > count)
             {
-                _ReadBuffer.Slice(0, count).CopyTo(new Span<byte>(buffer, offset, count));
+                reader.Slice(0, count).CopyTo(new Span<byte>(buffer, offset, count));
                 ReadAdvance(count);
                 return count;
             }
             else
             {
-                var len = (int)_ReadBuffer.Length;
-                _ReadBuffer.CopyTo(new Span<byte>(buffer, offset, len));
+                var len = (int)reader.Length;
+                reader.CopyTo(new Span<byte>(buffer, offset, len));
                 ReadAdvance(len);
                 return len;
             }
@@ -263,15 +239,20 @@ namespace BeetleX.Light.Memory
 
         public override void Write(byte[] buffer, int offset, int count)
         {
-            var memory = _PipeWriter.GetSpan(count);
             Span<byte> span = new Span<byte>(buffer, offset, count);
-            span.CopyTo(memory);
-            WriteAdvance(count);
+            while (count > 0)
+            {
+                var memory = WriteSocketStream.GetWriteSpan(count);
+                span.Slice(0, memory.Length).CopyTo(memory);
+                WriteAdvance(memory.Length);
+                span = span.Slice(memory.Length);
+                count -= memory.Length;
+            }
         }
 
         public override void WriteByte(byte value)
         {
-            var memory = _PipeWriter.GetMemory(1);
+            var memory = WriteSocketStream.GetWriteMemory(1);
             memory.Span[0] = value;
             WriteAdvance(1);
         }
@@ -284,13 +265,8 @@ namespace BeetleX.Light.Memory
                 try
                 {
                     _readCompletionSource?.TrySetResult(0);
-                    _socketReadPipe.Reader.CancelPendingRead();
-                    _socketReadPipe.Reader.Complete();
-                    _socketReadPipe.Writer.Complete();
-
-                    _socketWritePipe.Reader.CancelPendingRead();
-                    _socketWritePipe.Reader.Complete();
-                    _socketWritePipe.Writer.Complete();
+                    WriteSocketStream.Dispose();
+                    ReadSoecketStream.Dispose();
                     LogHandler?.GetLoger(LogLevel.Info)?.Write(LogHandler, "PipStream", "\u2714 Disposed", "");
                 }
                 catch (Exception e_)
@@ -305,31 +281,30 @@ namespace BeetleX.Light.Memory
             }
         }
 
-
         public ReadOnlySequence<byte> GetReadOnlySequence()
         {
-            return _ReadBuffer;
+            return _onlySequenceAdapter.ReadOnlySequence;
         }
 
         public void ReadAdvance(long count)
         {
-            _ReadBuffer = _ReadBuffer.Slice(count);
+            ReadSoecketStream.ReadAdvance(count);
         }
 
         public Span<byte> GetWriteSpan(int count)
         {
-            return _PipeWriter.GetSpan(count);
+            return WriteSocketStream.GetWriteSpan(count);
         }
 
         public Memory<byte> GetWriteMemory(int count)
         {
-            return _PipeWriter.GetMemory(count);
+            return WriteSocketStream.GetWriteMemory(count);
         }
 
         public void WriteAdvance(int count)
         {
             _catchWriteLength += count;
-            _PipeWriter.Advance(count);
+            WriteSocketStream.WriteAdvance(count);
         }
 
         public Span<byte> Allot(int count)

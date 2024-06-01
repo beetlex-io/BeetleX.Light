@@ -9,6 +9,7 @@ using System.Reflection;
 using System.Runtime;
 using System.Text;
 using System.Threading.Tasks;
+using System.Transactions;
 using BeetleX.Light.Args;
 using BeetleX.Light.Dispatchs;
 using BeetleX.Light.Logs;
@@ -26,7 +27,7 @@ namespace BeetleX.Light
         public NetServer()
         {
             _acceptthreadDispatcher
-            = new DispatchCenter<(Socket, ListenHandler)>(OnConnecting, Environment.ProcessorCount > 4 ? 2 : 1);
+            = new DispatchCenter<(Socket, ListenHandler)>(OnConnecting, Environment.ProcessorCount > 16 ? 16 : Environment.ProcessorCount);
             CommandLineParser = CommandLineParser.GetCommandLineParser();
         }
 
@@ -35,6 +36,8 @@ namespace BeetleX.Light
         private System.Collections.Concurrent.ConcurrentDictionary<long, NetContext> _userContexts = new System.Collections.Concurrent.ConcurrentDictionary<long, NetContext>();
 
         private DispatchCenter<(Socket, ListenHandler)> _acceptthreadDispatcher;
+
+        private IOQueue[] _IOScheduler;
 
         public CommandLineParser CommandLineParser { get; set; }
 
@@ -114,6 +117,7 @@ namespace BeetleX.Light
                 {
                     GetLoger(LogLevel.Debug)?.Write(item.Item1, "NetServer", "⏳ NetContext", $"Connecting");
                     netContext = new NetContext(item.Item1);
+                    netContext.IOQueue = GetOQueue();
                     netContext.ListenHandler = item.Item2;
                     netContext.Session = new SESSION();
                     netContext.Server = this;
@@ -129,6 +133,7 @@ namespace BeetleX.Light
                         netContext.NetStream.SslCompleted = true;
                     }
                     netContext.ID = GetID();
+                    netContext.Init();
                     _userContexts[netContext.ID] = netContext;
                     OnApplicationConnected(netContext);
                     GetLoger(LogLevel.Info)?.Write(netContext, "NetServer", "✔ NetContext", $"Connected");
@@ -137,104 +142,26 @@ namespace BeetleX.Light
                 }
                 else
                 {
-                    GetLoger(LogLevel.Warring)?.Write(item.Item1, "NetServer", "NetContext", $"Cancel");
+                    GetLoger(LogLevel.Info)?.Write(item.Item1, "NetServer", "NetContext", $"Cancel");
                     ListenHandler.CloseSocket(item.Item1);
                 }
             }
             catch (Exception e_)
             {
-                GetLoger(LogLevel.Info)?.Write(item.Item1, "NetServer", "Connect", $"Error {e_.Message}");
-            }
-            finally
-            {
-
+                GetLoger(LogLevel.Warring)?.Write(item.Item1, "NetServer", "Connect", $"Error {e_.Message}");
             }
         }
 
-        private void OnReceive(NetContext context, object messgae)
-        {
-            try
-            {
-                GetLoger(LogLevel.Debug)?.Write(context, "Session", "Receive", messgae == null ? context.NetStreamHandler.ReadSequenceNetStream.Length.ToString() : messgae.ToString());
-                context.Session.Receive(context, context.NetStreamHandler, messgae);
 
-            }
-            catch (Exception e_)
-            {
-                GetLoger(Logs.LogLevel.Error)?.WriteException(context, "NetContext", "SessionReceive", e_);
-            }
-        }
 
-        private void OnProtocolProcess(NetContext context)
-        {
-            if (context.NetStream.Length > context.ListenHandler.MaxProtocolPacketSize)
-            {
-                GetLoger(Logs.LogLevel.Warring)?.WriteException(context, "NetContext", "SessionReceive",
-                    new BXException($"Network data has overflowed the MaxProtocolPacketSize length"));
-                context.Dispose();
-                return;
-            }
-
-            if (context.ProtocolChannel != null)
-            {
-                try
-                {
-                    GetLoger(LogLevel.Debug)?.Write(context, "NetContext", $"{context.ProtocolChannel?.Name}Decoding", "");
-                    context.ProtocolChannel.Decoding(context.NetStreamHandler, OnReceive);
-
-                }
-                catch (Exception e_)
-                {
-                    GetLoger(Logs.LogLevel.Error)?.WriteException(context, "NetContext", $"{context.ProtocolChannel?.Name}Decoding", e_);
-                    context.Dispose();
-                    return;
-                }
-            }
-            else
-            {
-                OnReceive(context, null);
-            }
-        }
 
         private async Task StartNetContext(NetContext context)
         {
             var reviceTask = context.ReceiveToNetStream();
-            var sendTask = context.SendFromNetStream();
-            var readsocket = context.NetStream.ReadSocketData<NetContext>(context, async c =>
-            {
-                try
-                {
-                    if (!context.ListenHandler.SSL)
-                    {
-                        OnProtocolProcess(context);
-                        c.NetStream.ReaderAdvanceTo();
-                    }
-                    else
-                    {
-                        if (context.FirstReceive)
-                        {
-                            context.FirstReceive = false;
-                            var syncTask = context.NetSslStream.SyncData<NetContext>(context, c =>
-                            {
-
-                                OnProtocolProcess(c);
-
-                            });
-                        }
-                    }
-                }
-                catch (Exception bxe)
-                {
-                    GetLoger(Logs.LogLevel.Warring)?.WriteException(c, "NetContext", "SessionReceive", bxe);
-                }
-            });
-            await Task.WhenAll(reviceTask, sendTask);
-            if (context != null)
-            {
-                _userContexts.TryRemove(context.ID, out context);
-                OnApplicationDisconnect(context);
-                context?.Dispose();
-            }
+            await reviceTask;
+            _userContexts.TryRemove(context.ID, out context);
+            OnApplicationDisconnect(context);
+            context.Dispose();
         }
 
         private void SslAuthenticateAsyncCallback(IAsyncResult ar)
@@ -281,7 +208,7 @@ namespace BeetleX.Light
             _acceptthreadDispatcher.Enqueue((socket, listen));
         }
 
-        public void Write(LogLevel level, int threadid, string location, string model, string tag, string message, string stackTrace)
+        public void WriteLog(LogLevel level, int threadid, string location, string model, string tag, string message, string stackTrace)
         {
             try
             {
@@ -304,9 +231,22 @@ namespace BeetleX.Light
             catch { }
         }
 
+        private long _ioqueueInex = 0;
+        internal IOQueue GetOQueue()
+        {
+            return _IOScheduler[System.Threading.Interlocked.Increment(ref _ioqueueInex) % _IOScheduler.Length];
+        }
+
         public virtual void Start()
         {
             TryUnhandledException();
+            if (Options.IOQueues < 1)
+                Options.IOQueues = 1;
+            _IOScheduler = new IOQueue[Options.IOQueues];
+            for (int i = 0; i < Options.IOQueues; i++)
+            {
+                _IOScheduler[i] = new IOQueue();
+            }
             StartArgs = CommandLineParser.GetOption<StartArgs>();
             Options.SetDefaultListen(o =>
             {

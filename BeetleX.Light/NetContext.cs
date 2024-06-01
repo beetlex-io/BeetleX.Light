@@ -7,12 +7,15 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Reflection.PortableExecutable;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
+using BeetleX.Light.Dispatchs;
 using BeetleX.Light.Logs;
 using BeetleX.Light.Memory;
 using BeetleX.Light.Protocols;
 using static System.Runtime.InteropServices.JavaScript.JSType;
+using static BeetleX.Light.Memory.ReadOnlySequenceAdapter;
 
 namespace BeetleX.Light
 {
@@ -22,10 +25,16 @@ namespace BeetleX.Light
         {
             Socket = socket;
             NetStream = new PipeSpanSequenceNetStream(socket);
+            NetStream.FlushCompleted = OnStreamFlushCompleted;
             LocalEndPoint = socket.LocalEndPoint;
             RemoteEndPoint = socket.RemoteEndPoint;
             NetStream.LogHandler = this;
+            NetStream.ReadSoecketStream.LogHandler = this;
+            NetStream.WriteSocketStream.LogHandler = this;
+            NetStream.FlushReadSocketStreamCompleted = OnFlushReadSocketStream;
         }
+
+        internal TaskCompletionSource ContextCompletionSource = new TaskCompletionSource();
 
         public Socket Socket { get; internal set; }
 
@@ -47,6 +56,8 @@ namespace BeetleX.Light
 
         public SocketError SocketErrorCode { get; set; } = SocketError.Success;
 
+        public IOQueue IOQueue { get; internal set; }
+
         public ListenHandler ListenHandler { get; set; }
 
         public bool TLS { get; internal set; } = false;
@@ -56,17 +67,14 @@ namespace BeetleX.Light
         private int _sendState = 0;
         public bool Send(object message)
         {
-            if (message == null)
-            {
-                GetLoger(LogLevel.Warring)?.Write(this, "NetContext", $"Send", "Message is null");
-                return false;
-            }
+
             if (Disposed)
             {
                 GetLoger(LogLevel.Warring)?.Write(this, "NetContext", $"Send", "Session disposed");
                 return false;
             }
-            _sendQueue.Enqueue(message);
+            if (message != null)
+                _sendQueue.Enqueue(message);
             if (_sendQueue.Count > 0)
                 OnSend(System.Threading.Interlocked.CompareExchange(ref _sendState, 1, 0) == 0);
             return true;
@@ -110,17 +118,87 @@ namespace BeetleX.Light
                 }
                 if (haveData)
                     NetStreamHandler.Flush();
-                _sendState = 0;
             }
 
+        }
+        private void OnReceive(NetContext context, object messgae)
+        {
+            try
+            {
+                GetLoger(LogLevel.Debug)?.Write(context, "Session", "Receive", messgae == null ? context.NetStreamHandler.ReadSequenceNetStream.Length.ToString() : messgae.ToString());
+                context.Session.Receive(context, messgae);
+
+            }
+            catch (Exception e_)
+            {
+                GetLoger(Logs.LogLevel.Error)?.WriteException(context, "NetContext", "SessionReceive", e_);
+            }
+        }
+
+        private void OnProtocolProcess(INetContext obj)
+        {
+            NetContext context = (NetContext)obj;
+            if (context.NetStream.Length > context.ListenHandler.MaxProtocolPacketSize)
+            {
+                GetLoger(Logs.LogLevel.Warring)?.WriteException(context, "NetContext", "SessionReceive",
+                    new BXException($"Network data has overflowed the MaxProtocolPacketSize length"));
+                context.Dispose();
+                return;
+            }
+
+            if (context.ProtocolChannel != null)
+            {
+                try
+                {
+                    GetLoger(LogLevel.Debug)?.Write(context, "NetContext", $"{context.ProtocolChannel?.Name}Decoding", "");
+                    context.ProtocolChannel.Decoding(context.NetStreamHandler, OnReceive);
+
+                }
+                catch (Exception e_)
+                {
+                    GetLoger(Logs.LogLevel.Error)?.WriteException(context, "NetContext", $"{context.ProtocolChannel?.Name}Decoding", e_);
+                    context.Dispose();
+                    return;
+                }
+            }
+            else
+            {
+                OnReceive(context, null);
+            }
+        }
+
+        private void OnFlushReadSocketStream(INetContext data)
+        {
+            NetContext context = (NetContext)data;
+            try
+            {
+
+                if (!context.ListenHandler.SSL)
+                {
+                    OnProtocolProcess(context);
+                }
+                else
+                {
+                    if (context.FirstReceive)
+                    {
+                        context.FirstReceive = false;
+                        context.NetSslStream.SyncDataCompleted = OnProtocolProcess;
+                        var syncTask = context.NetSslStream.SyncData<NetContext>(context);
+                    }
+                }
+            }
+            catch (Exception bxe)
+            {
+                GetLoger(Logs.LogLevel.Debug)?.WriteException(context, "NetContext", "SessionReceive", bxe);
+            }
         }
 
         internal async Task ReceiveToNetStream()
         {
-            var writer = NetStream.ReceiveWriter;
+            var writer = NetStream.ReadSoecketStream;
             while (true)
             {
-                Memory<byte> memory = writer.GetMemory(ListenHandler.ReceiveBufferSize);
+                Memory<byte> memory = writer.GetWriteMemory(ListenHandler.ReceiveBufferSize);
                 try
                 {
                     int bytesRead = await Socket.ReceiveAsync(memory, SocketFlags.None);
@@ -132,73 +210,115 @@ namespace BeetleX.Light
                         await Task.Delay(Constants.ReceiveZeroDelayTime);
                         break;
                     }
-                    writer.Advance(bytesRead);
+                    writer.WriteAdvance(bytesRead);
+                    NetStream.FlushReadSocketStream<NetContext>(this);
                 }
                 catch (SocketException sockErr)
                 {
                     this.SocketErrorCode = sockErr.SocketErrorCode;
                     Server?.GetLoger(Logs.LogLevel.Warring)?.WriteException(this, "NetContext", "ReceiveData", sockErr);
+                    Dispose();
                     break;
                 }
                 catch (Exception ex)
                 {
                     Server?.GetLoger(Logs.LogLevel.Warring)?.WriteException(this, "NetContext", "ReceiveData", ex);
-                    break;
-                }
-                FlushResult result = await writer.FlushAsync();
-                if (result.IsCompleted)
-                {
+                    Dispose();
                     break;
                 }
 
             }
-            // Server.GetLoger(LogLevel.Debug)?.Write(this, "NetContext", "SocketReceive", $"Completed");
-            Dispose();
+
         }
 
-        internal async Task SendFromNetStream()
+        internal void Init()
         {
-            var reader = NetStream.SendReader;
-            ReadResult result;
-            while (true)
+            if (NetSslStream != null)
             {
-                try
+                _streamHandler = (NetSslStream, ListenHandler.LittleEndian);
+                _streamHandler.ReadSequenceNetStream = NetSslStream.OnlySequenceAdapterStream;
+            }
+            else
+            {
+                _streamHandler = (NetStream, ListenHandler.LittleEndian);
+                _streamHandler.ReadSequenceNetStream = NetStream.ReadSoecketStream;
+            }
+            _streamHandler.LineMaxLength = ListenHandler.LineMaxLength;
+            _streamHandler.LineEof = ListenHandler.LineEof;
+        }
+
+        class SendWork : IIOWork
+        {
+            public NetContext Context { get; set; }
+
+            public MemoryBlock Data { get; set; }
+            public void Execute()
+            {
+                Context.SendToSocket(Data, true);
+
+            }
+        }
+
+        private SendWork _sendWork = new SendWork();
+        private void OnStreamFlushCompleted(MemoryBlock data)
+        {
+            //_sendWork.Context = this;
+            //_sendWork.Data = data;
+            //IOQueue.Schedule(_sendWork);
+            SendToSocket(data, true);
+        }
+        internal async Task SendToSocket(MemoryBlock segment, bool begin)
+        {
+            if (segment == null)
+                return;
+            try
+            {
+                var buffer = segment.GetUseMemory();
+                if (buffer.Length != 0)
                 {
-                    result = await reader.ReadAsync();
-                    ReadOnlySequence<byte> buffer = result.Buffer;
-                    if (buffer.Length == 0)
-                        break;
-                    while (buffer.Length > 0)
-                    {
-                        var len = await Socket.SendAsync(buffer.First);
-                        Server?.GetLoger(LogLevel.Debug)?.Write(this, "NetContext", "SendData", $"Length {len}");
-                        Server?.GetLoger(LogLevel.Trace)?.Write(this, "NetContext", "✉ SendData", $"{Convert.ToHexString(buffer.FirstSpan.Slice(0, len))}");
-                        buffer = buffer.Slice(len);
-                    }
-                    reader.AdvanceTo(buffer.End);
-                }
-                catch (SocketException sockErr)
-                {
-                    this.SocketErrorCode = sockErr.SocketErrorCode;
-                    Server?.GetLoger(Logs.LogLevel.Warring)?.WriteException(this, "NetContext", "SendData", sockErr);
-                    break;
-                }
-                catch (Exception e_)
-                {
-                    Server?.GetLoger(Logs.LogLevel.Warring)?.WriteException(this, "NetContext", "SendData", e_);
-                    break;
-                }
-                if (result.IsCompleted)
-                {
-                    break;
+                    var len = await Socket.SendAsync(buffer);
+                    GetLoger(LogLevel.Debug)?.Write(this, "NetContext", "SendData", $"Length {len}");
+                    GetLoger(LogLevel.Trace)?.Write(this, "NetContext", "✉ SendData", $"{Convert.ToHexString(buffer.Slice(0, len).Span)}");
+                    if (len != buffer.Length)
+                        GetLoger(LogLevel.Error)?.Write(this, "NetContext", "SendData", $"Buffer length {buffer.Length} completed {len}");
+                    await SendToSocket(segment.Next, false);
                 }
             }
-            // Server.GetLoger(LogLevel.Debug)?.Write(this, "NetContext", "SocketReceive", $"Completed");
-            Dispose();
+            catch (SocketException sockErr)
+            {
+                this.SocketErrorCode = sockErr.SocketErrorCode;
+                GetLoger(Logs.LogLevel.Warring)?.WriteException(this, "NetContext", "SendData", sockErr);
+                Dispose();
+
+            }
+            catch (Exception e_)
+            {
+                GetLoger(Logs.LogLevel.Warring)?.WriteException(this, "NetContext", "SendData", e_);
+                Dispose();
+
+            }
+            finally
+            {
+                if (begin)
+                {
+                    while (segment != null)
+                    {
+                        var next = segment.Next;
+                        segment.Dispose();
+                        segment = next;
+                    }
+                }
+
+            }
+            if (begin)
+            {
+                _sendState = 0;
+                Send(null);
+            }
+
         }
 
         private int mDisposed = 0;
-
 
         internal bool FirstReceive { get; set; } = true;
         public bool Disposed => mDisposed != 0;
@@ -223,6 +343,7 @@ namespace BeetleX.Light
                     {
                         GetLoger(Logs.LogLevel.Warring)?.WriteException(this, "NetContext", "Disposed", e_);
                     }
+                    ContextCompletionSource.SetResult();
                     ProtocolChannel = null;
                     _streamHandler = null;
                     Server = null;
@@ -250,30 +371,20 @@ namespace BeetleX.Light
             OnDisposed(System.Threading.Interlocked.CompareExchange(ref mDisposed, 1, 0) == 0);
         }
 
-        private StreamHandler _streamHandler;
+        internal StreamHandler _streamHandler;
 
         public StreamHandler NetStreamHandler
         {
             get
             {
-                if (_streamHandler == null)
-                {
-                    if (NetSslStream != null)
-                    {
-                        _streamHandler = (NetSslStream, ListenHandler.LittleEndian);
-                        _streamHandler.ReadSequenceNetStream = NetSslStream.OnlySequenceAdapterStream;
-                    }
-                    else
-                    {
-                        _streamHandler = (NetStream, ListenHandler.LittleEndian);
-                        _streamHandler.ReadSequenceNetStream = NetStream;
-                    }
-                    _streamHandler.LineMaxLength = ListenHandler.LineMaxLength;
-                    _streamHandler.LineEof = ListenHandler.LineEof;
-                }
                 return _streamHandler;
             }
         }
+
+        public IStreamWriter Writer => _streamHandler;
+
+        public IStreamReader Reader => _streamHandler;
+
         public LogWriter? GetLoger(LogLevel level)
         {
             return Server?.GetLoger(level);

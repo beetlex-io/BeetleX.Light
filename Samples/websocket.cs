@@ -31,9 +31,9 @@ Console.ReadLine();
 
 public class WSSession : SesionBase
 {
-    public override void Receive(NetContext context, StreamHandler stream, object message)
+    public override void Receive(NetContext context, object message)
     {
-        if (message is WSHttpRequest request)
+        if (message is WSRequest request)
         {
             OnConnect(context, request);
         }
@@ -59,9 +59,9 @@ public class WSSession : SesionBase
         base.Connected(context);
         context.NetStreamHandler.LittleEndian = false;
     }
-    public WSHttpRequest Request { get; set; }
+    public WSRequest Request { get; set; }
 
-    protected virtual void OnConnect(NetContext context, WSHttpRequest request)
+    protected virtual void OnConnect(NetContext context, WSRequest request)
     {
         Request = request;
         context.GetLoger(LogLevel.Debug)?.Write(context, "WSSession", "✔ Upgrade", "Success");
@@ -96,7 +96,7 @@ public class WSServerChannel : IProtocolChannel<NetContext>
         result.Context = Context;
         return result;
     }
-    private WSHttpRequest _httpRequest = new WSHttpRequest();
+    private WSRequest _httpRequest = new WSRequest();
 
     private DataFrame _dataFrame = new DataFrame();
     public void Decoding(IStreamReader reader, Action<NetContext, object> completed)
@@ -131,7 +131,7 @@ public class WSServerChannel : IProtocolChannel<NetContext>
                 {
                     if (string.Compare(_httpRequest.Method, "get", true) != 0 || string.Compare(_httpRequest.Upgrade, "websocket", true) != 0)
                     {
-                        _httpRequest = new WSHttpRequest();
+                        _httpRequest = new WSRequest();
                         Context.GetLoger(LogLevel.Warring)?.Write(Context, "WSSession", "Upgrade", "Error");
                         UpgradeWebsocketError error = new UpgradeWebsocketError();
                         Context.Send(error);
@@ -197,9 +197,9 @@ public class WSClientChannel : IProtocolChannel<NetClient>
     }
 }
 
-public class WSHttpRequest : IWSDataWrite
+public class WSRequest : IWSDataWrite
 {
-    public WSHttpRequest()
+    public WSRequest()
     {
         byte[] key = new byte[16];
         new Random().NextBytes(key);

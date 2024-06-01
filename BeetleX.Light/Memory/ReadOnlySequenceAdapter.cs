@@ -12,7 +12,7 @@ namespace BeetleX.Light.Memory
     public class ReadOnlySequenceAdapter : IDisposable
     {
 
-        public int SegmentMinSize { get; set; } = 0;
+ 
 
         public ReadOnlySequenceAdapter()
         {
@@ -26,18 +26,22 @@ namespace BeetleX.Light.Memory
 
         public Memory<byte> GetMemory(int length)
         {
+
             if (_end == null)
             {
                 CreateMemory(length);
             }
-            if (!_end.TryAllot(length))
+            int availableSize = _end.AvailableSize;
+            if (availableSize < length && availableSize < 1024)
                 CreateMemory(length);
             return _end.Allot(length);
+
         }
 
         private void CreateMemory(int length)
         {
-            MemoryBlock result = new MemoryBlock(length, SegmentMinSize);
+            // MemoryBlock result = new MemoryBlock(length, SegmentMinSize);
+            MemoryBlock result = MemoryBlockPool.Default.Get(length);
             if (_first == null)
                 _first = result;
             if (_end == null)
@@ -60,8 +64,18 @@ namespace BeetleX.Light.Memory
             _end.AdvanceTo(length);
         }
 
+        internal MemoryBlock FlushReturn()
+        {
+
+            var result = _first;
+            _first = null;
+            _end = null;
+            return result;
+        }
+
         public void Flush()
         {
+
             var start = _first.GetUseMemory();
             if (_first == _end)
             {
@@ -80,6 +94,7 @@ namespace BeetleX.Light.Memory
                 }
                 _readOnlySequence = new ReadOnlySequence<byte>(first, 0, next, next.Memory.Length);
             }
+
         }
 
         private ReadOnlySequence<byte> _readOnlySequence;
@@ -96,8 +111,8 @@ namespace BeetleX.Light.Memory
                 if (length >= len)
                 {
                     length -= len;
-                    memory.Dispose();
                     _first = memory.Next;
+                    memory.Dispose();
                     if (_first == null)
                     {
                         _end = null;
@@ -116,20 +131,14 @@ namespace BeetleX.Light.Memory
         {
             try
             {
-                if (_first != null)
+                var segment = _first;
+                _first = null;
+                _end = null;
+                while (segment != null)
                 {
-                    _first.Dispose();
-                    if (_first != _end)
-                    {
-                        var next = _first.Next;
-                        while (next != null)
-                        {
-                            next.Dispose();
-                            next = next.Next;
-                        }
-                    }
-                    _first = null;
-                    _end = null;
+                    var next = segment.Next;
+                    segment.Dispose();
+                    segment = next;
                 }
                 _readOnlySequence = default;
                 LogHandler?.GetLoger(LogLevel.Info)?.Write(LogHandler, "SequenceAdapter", "\u2714 Disposed", "");
@@ -142,59 +151,7 @@ namespace BeetleX.Light.Memory
         }
 
         public IGetLogHandler LogHandler { get; set; }
-        class MemoryBlock : IDisposable
-        {
-            public MemoryBlock(int length, int segmentMinSize)
-            {
-                Data = MemoryPool<byte>.Shared.Rent(length < segmentMinSize ? segmentMinSize : length);
-                Length = Data.Memory.Length;
-                Memory = Data.Memory;
-            }
-            public IMemoryOwner<byte> Data { get; set; }
 
-            public Memory<byte> Memory { get; set; }
-
-            public int Length { get; set; }
-
-            public int Allocated { get; set; }
-
-            public int Postion { get; set; }
-
-            public MemoryBlock Next { get; set; }
-
-            public void ReadAdvanceTo(int count)
-            {
-                Postion += count;
-            }
-
-            public void AdvanceTo(int count)
-            {
-                Allocated += count;
-            }
-
-
-
-            public Memory<byte> Allot(int size)
-            {
-                return Memory.Slice(Allocated, size);
-            }
-            public bool TryAllot(int size)
-            {
-                return Memory.Length - Allocated >= size;
-            }
-
-            public Memory<byte> GetUseMemory()
-            {
-                return Memory.Slice(Postion, Allocated - Postion);
-            }
-
-            public void Dispose()
-            {
-                Data.Dispose();
-                Memory = null;
-                Data = null;
-            }
-        }
         internal class MemorySegment : ReadOnlySequenceSegment<byte>
         {
             public MemorySegment(ReadOnlyMemory<byte> memory)

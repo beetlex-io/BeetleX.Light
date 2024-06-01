@@ -34,7 +34,7 @@ Console.ReadLine();
 
 public class HttpSession : SesionBase
 {
-    public override void Receive(NetContext context, StreamHandler stream, object message)
+    public override void Receive(NetContext context, object message)
     {
         HttpResponse response = new HttpResponse();
         response.SetJson(new { Text = "Hello World", Time = DateTime.Now });

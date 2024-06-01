@@ -16,7 +16,7 @@ namespace BeetleX.Light.Logs
     }
     public interface ILogHandler
     {
-        void Write(LogLevel level, int threadid, string location, string model, string tag, string message, string stackTrace);
+        void WriteLog(LogLevel level, int threadid, string location, string model, string tag, string message, string stackTrace);
     }
     public struct LogWriter
     {
@@ -58,7 +58,7 @@ namespace BeetleX.Light.Logs
         {
             if (string.IsNullOrEmpty(location))
                 location = "BeetleX";
-            Loger?.Write(Level, Thread.CurrentThread.ManagedThreadId, location, model, tag, message, stackTrace);
+            Loger?.WriteLog(Level, Thread.CurrentThread.ManagedThreadId, location, model, tag, message, stackTrace);
         }
     }
 

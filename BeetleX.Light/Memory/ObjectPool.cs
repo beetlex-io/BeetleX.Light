@@ -9,60 +9,97 @@ namespace BeetleX.Light.Memory
     public class ObjectPoolFactory<T>
         where T : IResettable, new()
     {
-        private System.Collections.Concurrent.ConcurrentQueue<ObjectPoolItem<T>> _objectPoolItems = new System.Collections.Concurrent.ConcurrentQueue<ObjectPoolItem<T>>();
+        public static readonly ObjectPoolFactory<T> _default = new ObjectPoolFactory<T>();
+        public static ObjectPoolFactory<T> Default => _default;
+        public ObjectPoolFactory()
+        {
+            _partitions = new Partition[Environment.ProcessorCount];
+            for (int i = 0; i < _partitions.Length; i++)
+            {
+                _partitions[i] = new Partition();
+            }
+        }
 
+        private Partition[] _partitions;
 
         public ObjectPoolItem<T> Get()
         {
-            ObjectPoolItem<T> result = default;
-            if (!_objectPoolItems.TryDequeue(out result))
+            int index = Thread.GetCurrentProcessorId() % _partitions.Length;
+            var result = _partitions[index].Pop();
+            if (result == null)
             {
                 result = new ObjectPoolItem<T>();
-                result.Factory = this;
+                System.Threading.Interlocked.Increment(ref _allocatedQuantity);
             }
             result.Data.Reset();
             return result;
         }
 
-        private static ObjectPoolFactory<T> _default = null;
-        public static ObjectPoolFactory<T> Default
+        public void Return(ObjectPoolItem<T> item)
+        {
+            int index = Thread.GetCurrentProcessorId() % _partitions.Length;
+            _partitions[index].Push(item);
+        }
+
+        class Partition
+        {
+            private Stack<ObjectPoolItem<T>> mData = new Stack<ObjectPoolItem<T>>(1024);
+
+            public long Length => mData.Count;
+            public ObjectPoolItem<T> Pop()
+            {
+                lock (this)
+                {
+                    if (mData.Count > 0)
+                        return mData.Pop();
+                    return default(ObjectPoolItem<T>);
+                }
+
+            }
+
+            public void Push(ObjectPoolItem<T> data)
+            {
+                lock (this)
+                {
+                    mData.Push(data);
+                }
+            }
+
+        }
+
+        private long _allocatedQuantity = 0;
+
+        public long AllocatedQuantity => _allocatedQuantity;
+
+        public long Count
         {
             get
             {
-                if (_default == null)
+                long result = 0;
+                foreach (var item in _partitions)
                 {
-                    _default = new ObjectPoolFactory<T>();
+                    result += item.Length;
                 }
-                return _default;
+                return result;
             }
         }
 
-        internal void Return(ObjectPoolItem<T> item)
-        {
-            _objectPoolItems.Enqueue(item);
-        }
-
-    }
-
-    public interface IResettable
-    {
-        void Reset();
     }
 
     public class ObjectPoolItem<T> : IDisposable
         where T : IResettable, new()
     {
-        public ObjectPoolItem()
-        {
-            Data = new T();
-        }
+        public T Data { get; internal set; } = new T();
 
-        internal ObjectPoolFactory<T> Factory { get; set; }
-        public T Data { get; internal set; }
         public void Dispose()
         {
-            Factory.Return(this);
+            ObjectPoolFactory<T>.Default.Return(this);
         }
+    }
+
+    public interface IResettable
+    {
+        void Reset();
     }
 
     public class PoolMemoryStream : MemoryStream, IResettable
