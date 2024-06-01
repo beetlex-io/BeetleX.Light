@@ -1,5 +1,5 @@
 ## BeetleX.Light
-Based on pipelines high performance dotnet core socket tcp/udp communication components, support tls, http, https, websocket, rpc, mqtt, redis protocols, millions of connections are supported.
+high performance dotnet core socket tcp/udp communication components, support tls, http, https, websocket, rpc, mqtt, redis protocols, millions of connections are supported.
 
 ## base
 ``` csharp
