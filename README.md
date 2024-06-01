@@ -7,39 +7,46 @@ NetServer<Application, UserSession> netServer = new NetServer<Application, UserS
 netServer.Options.SetDefaultListen(o =>
 {
     o.Port = 8089;
-    //o.EnabledSSL("generate.pfx", "12345678",
-    //    System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls11);
+    o.EnabledSSL("generate.pfx", "12345678",
+        System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls11);
 });
 netServer.Options.LogLevel = LogLevel.Trace;
 netServer.Options.AddLogOutputHandler<LogOutputToConsole>().AddLogOutputHandler<LogOutputToFile>();
 netServer.Start();
 await Task.Delay(1000);
-
+var _Data = Encoding.ASCII.GetBytes("".PadRight(1024 * 9, '1'));
 NetClient client = "tcp://127.0.0.1:8089";
-//client.SslServiceName = "beetlex-io.com";
-
+client.SslServiceName = "beetlex-io.com";
 client.AddLogOutputHandler<LogOutputToConsole>();
 client.LogLevel = LogLevel.Trace;
-client.Receive = (client, handler, msg) =>
+client.Receive = (client, msg) =>
 {
-    client.GetLoger(LogLevel.Info)?.Write(client, "Client", "Receive", handler.ReadString());
+    client.GetLoger(LogLevel.Info)?.Write(client, "Client", "Receive", client.Reader.ReadString());
 };
 await client.Connect();
 while (true)
 {
+
     client.NetStreamHandler.WriteString("Hello World");
     client.NetStreamHandler.Flush();
-    await Task.Delay(5000);
+    await Task.Delay(10000);
 }
 Console.ReadLine();
 
 public class UserSession : SesionBase
 {
-    public override void Receive(NetContext context, StreamHandler stream, object message)
+
+    public UserSession()
     {
-        context.GetLoger(LogLevel.Info)?.Write(context, "Client", "Receive", stream.ReadString());
-        stream.WriteString($"Hello {DateTime.Now}");
-        stream.Flush();
+
+    }
+
+    public override void Receive(NetContext context, object message)
+    {
+        var value = context.Reader.ReadString();
+        context.GetLoger(LogLevel.Info)?.Write(context, "UserSession", "Receive", value);
+        context.Writer.WriteString(value);
+
     }
     public override void Connected(NetContext context)
     {
@@ -68,9 +75,9 @@ await Task.Delay(1000);
 
 AwaiterNetClient<JsonChannel<NetClient>> client = "tcp://127.0.0.1:8090";
 client.SslServiceName = "beetlex-io.com";
-client.SetProtocolChannel<JsonChannel<NetClient>>();
 client.AddLogOutputHandler<LogOutputToConsole>();
 client.LogLevel = LogLevel.Trace;
+client.TimeOut = 1000000;
 var request = new Register();
 request.Name = "henryfan";
 request.Email = "henryfan@msn.com"; ;
@@ -84,7 +91,7 @@ Console.ReadLine();
 
 public class UserSession : SesionBase
 {
-    public override void Receive(NetContext context, StreamHandler stream, object message)
+    public override void Receive(NetContext context, object message)
     {
         if (message is Register reg)
         {
@@ -133,7 +140,7 @@ public class JsonChannel<T> : IProtocolChannel<T>
                         Context.GetLoger(LogLevel.Error)?.WriteException(Context, "JsonChannel", "Decoding", ex);
                         Context.Close(ex);
                     }
-                    return JsonSerializer.Deserialize(memory.Span.Slice(type.BUffersLength), type.MessageType);
+                    return JsonSerializer.Deserialize(memory.Span.Slice(type.BuffersLength), type.MessageType);
                 })
                )
         {
