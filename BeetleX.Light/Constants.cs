@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace BeetleX.Light
 {
-    internal class Constants
+    public class Constants
     {
         public static int StackMaxSize = 1024;
 

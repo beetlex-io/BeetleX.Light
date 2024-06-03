@@ -19,6 +19,7 @@ namespace BeetleX.Light
         {
             Name = name;
             LineEof = Encoding.UTF8.GetBytes("\r\n");
+            ReceiveBufferSize = Constants.MemorySegmentMinSize;
         }
         public int Port { get; set; } = 8089;
 

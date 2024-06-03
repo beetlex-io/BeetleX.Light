@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 using BeetleX.Light.Args;
+using BeetleX.Light.Extension;
 using BeetleX.Light.Logs;
 
 namespace BeetleX.Light
@@ -26,5 +27,12 @@ namespace BeetleX.Light
         System.Collections.Concurrent.ConcurrentDictionary<long, NetContext> UserContexts { get; }
 
         NetContext GetUserContext(long id);
+
+        NetworkStatistics NetworkStatistics { get; }
+
+        void SencCompleted(int bytes);
+
+        void ReceiveCompleted(int bytes);
+
     }
 }

@@ -119,6 +119,9 @@ namespace BeetleX.Light.Memory
             Length = Data.Memory.Length;
             Memory = Data.Memory;
         }
+
+        private MemorySegment _memorySegment = new MemorySegment();
+
         public IMemoryOwner<byte> Data { get; set; }
 
         public Memory<byte> Memory { get; set; }
@@ -141,6 +144,11 @@ namespace BeetleX.Light.Memory
             Allocated += count;
         }
 
+        public MemorySegment GetUseMemorySegment()
+        {
+            _memorySegment.SetMemory(GetUseMemory());
+            return _memorySegment;
+        }
 
         public Memory<byte> Allot(int size)
         {

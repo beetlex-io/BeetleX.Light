@@ -12,7 +12,7 @@ namespace BeetleX.Light.Memory
     public class ReadOnlySequenceAdapter : IDisposable
     {
 
- 
+
 
         public ReadOnlySequenceAdapter()
         {
@@ -32,7 +32,7 @@ namespace BeetleX.Light.Memory
                 CreateMemory(length);
             }
             int availableSize = _end.AvailableSize;
-            if (availableSize < length && availableSize < 1024)
+            if (availableSize < length && availableSize < 256)
                 CreateMemory(length);
             return _end.Allot(length);
 
@@ -76,19 +76,37 @@ namespace BeetleX.Light.Memory
         public void Flush()
         {
 
-            var start = _first.GetUseMemory();
+            //var start = _first.GetUseMemory();
+            //if (_first == _end)
+            //{
+            //    _readOnlySequence = new ReadOnlySequence<byte>(start);
+            //}
+            //else
+            //{
+            //    MemorySegment first = new MemorySegment(start);
+            //    MemoryBlock last = _first.Next;
+            //    MemorySegment next = first;
+            //    while (last != null)
+            //    {
+            //        next = next.Append(last.GetUseMemory());
+            //        last = last.Next;
+
+            //    }
+            //    _readOnlySequence = new ReadOnlySequence<byte>(first, 0, next, next.Memory.Length);
+            //}
+
             if (_first == _end)
             {
-                _readOnlySequence = new ReadOnlySequence<byte>(start);
+                _readOnlySequence = new ReadOnlySequence<byte>(_first.GetUseMemory());
             }
             else
             {
-                MemorySegment first = new MemorySegment(start);
+                MemorySegment first = _first.GetUseMemorySegment();
                 MemoryBlock last = _first.Next;
                 MemorySegment next = first;
                 while (last != null)
                 {
-                    next = next.Append(last.GetUseMemory());
+                    next = next.Append(last.GetUseMemorySegment());
                     last = last.Next;
 
                 }
@@ -152,24 +170,38 @@ namespace BeetleX.Light.Memory
 
         public IGetLogHandler LogHandler { get; set; }
 
-        internal class MemorySegment : ReadOnlySequenceSegment<byte>
+
+    }
+    internal class MemorySegment : ReadOnlySequenceSegment<byte>
+    {
+        //public MemorySegment(ReadOnlyMemory<byte> memory)
+        //{
+        //    Memory = memory;
+        //}
+
+        //public MemorySegment Append(ReadOnlyMemory<byte> memory)
+        //{
+        //    var segment = new MemorySegment(memory)
+        //    {
+        //        RunningIndex = RunningIndex + Memory.Length
+        //    };
+
+        //    Next = segment;
+
+        //    return segment;
+        //}
+        public void SetMemory(ReadOnlyMemory<byte> memory)
         {
-            public MemorySegment(ReadOnlyMemory<byte> memory)
-            {
-                Memory = memory;
-            }
-
-            public MemorySegment Append(ReadOnlyMemory<byte> memory)
-            {
-                var segment = new MemorySegment(memory)
-                {
-                    RunningIndex = RunningIndex + Memory.Length
-                };
-
-                Next = segment;
-
-                return segment;
-            }
+            RunningIndex = 0;
+            Memory = memory;
         }
+
+        public MemorySegment Append(MemorySegment next)
+        {
+            next.RunningIndex = RunningIndex + Memory.Length;
+            Next = next;
+            return next;
+        }
+
     }
 }

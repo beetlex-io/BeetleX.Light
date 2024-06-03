@@ -261,7 +261,6 @@ namespace BeetleX.Light.Memory
                 return result;
             }
         }
-
         public static int Write(this Span<byte> _buffer, string value, Encoding encoding)
         {
             if (string.IsNullOrEmpty(value))

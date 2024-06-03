@@ -43,6 +43,7 @@ namespace BeetleX.Light.Memory
             StreamHandler handler = new StreamHandler();
             handler.Stream = stream;
             handler.WriteSequenceNetStream = stream as ISpanSequenceNetStream;
+            handler.ReadSequenceNetStream = stream as ISpanSequenceNetStream;
             return handler;
         }
 
@@ -51,6 +52,7 @@ namespace BeetleX.Light.Memory
             StreamHandler handler = new StreamHandler();
             handler.Stream = stream.Item1;
             handler.WriteSequenceNetStream = stream.Item1 as ISpanSequenceNetStream;
+            handler.ReadSequenceNetStream = stream.Item1 as ISpanSequenceNetStream;
             handler.LittleEndian = stream.Item2;
             return handler;
         }
@@ -62,12 +64,24 @@ namespace BeetleX.Light.Memory
             if (!string.IsNullOrEmpty(value))
             {
                 coding = coding ?? Encoding.UTF8;
+                int encharLen = coding.IsSingleByte ? 1 : 4;
                 if (WriteSequenceNetStream != null)
                 {
-                    var span = WriteSequenceNetStream.GetWriteSpan(value.Length * 6);
-                    var len = span.Write(value, coding);
-                    WriteSequenceNetStream.WriteAdvance(len);
-                    return len;
+                    ReadOnlySpan<char> spanValue = value;
+                    int result = 0;
+                    while (spanValue.Length > 0)
+                    {
+                        ReadOnlySpan<char> chars;
+                        Span<byte> span;
+                        span = WriteSequenceNetStream.GetWriteSpan(Constants.MemorySegmentMaxSize);
+                        int encodeLen = span.Length / encharLen;
+                        chars = spanValue.Slice(0, spanValue.Length > encodeLen ? encodeLen : spanValue.Length);
+                        var len = coding.GetBytes(chars, span);
+                        WriteSequenceNetStream.WriteAdvance(len);
+                        result += len;
+                        spanValue = spanValue.Slice(len);
+                    }
+                    return result;
                 }
                 else
                 {

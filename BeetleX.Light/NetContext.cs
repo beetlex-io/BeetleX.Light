@@ -193,7 +193,7 @@ namespace BeetleX.Light
             }
         }
 
-        internal async Task ReceiveToNetStream()
+        internal async Task ReceiveFromSocket()
         {
             var writer = NetStream.ReadSoecketStream;
             while (true)
@@ -202,6 +202,8 @@ namespace BeetleX.Light
                 try
                 {
                     int bytesRead = await Socket.ReceiveAsync(memory, SocketFlags.None);
+                    Server.ReceiveCompleted(bytesRead);
+                    Session.ReceiveCompleted(bytesRead);
                     Server?.GetLoger(LogLevel.Debug)?.Write(this, "NetContext", "ReceiveData", $"Length {bytesRead}");
                     Server?.GetLoger(LogLevel.Trace)?.Write(this, "NetContext", "✉ ReceiveData", $"{Convert.ToHexString(memory.Slice(0, bytesRead).Span)}");
                     if (bytesRead == 0)
@@ -265,7 +267,7 @@ namespace BeetleX.Light
             //_sendWork.Context = this;
             //_sendWork.Data = data;
             //IOQueue.Schedule(_sendWork);
-            SendToSocket(data, true);
+            var task = SendToSocket(data, true);
         }
         internal async Task SendToSocket(MemoryBlock segment, bool begin)
         {
@@ -277,6 +279,8 @@ namespace BeetleX.Light
                 if (buffer.Length != 0)
                 {
                     var len = await Socket.SendAsync(buffer);
+                    Server.SencCompleted(len);
+                    Session.SencCompleted(len);
                     GetLoger(LogLevel.Debug)?.Write(this, "NetContext", "SendData", $"Length {len}");
                     GetLoger(LogLevel.Trace)?.Write(this, "NetContext", "✉ SendData", $"{Convert.ToHexString(buffer.Slice(0, len).Span)}");
                     if (len != buffer.Length)

@@ -63,5 +63,48 @@ namespace BeetleX.Light.Logs
     }
 
 
+    public class DefaultLoger : IGetLogHandler, ILogHandler
+    {
+        public EndPoint EndPoint { get; set; }
+
+        public LogLevel LogLevel { get; set; } = LogLevel.Info;
+
+        public LogWriter? GetLoger(LogLevel level)
+        {
+            if ((int)(LogLevel) <= (int)level)
+            {
+                LogWriter result = new LogWriter();
+                result.Level = level;
+                result.Loger = this;
+                return result;
+
+            }
+            return null;
+        }
+        public List<ILogOutputHandler> LogOutputHandlers { get; private set; } = new List<ILogOutputHandler>();
+
+        public void WriteLog(LogLevel level, int threadid, string location, string model, string tag, string message, string stackTrace)
+        {
+            try
+            {
+                if (LogOutputHandlers.Count > 0)
+                {
+                    LogRecord log = new LogRecord();
+                    log.ThreadID = threadid;
+                    log.Model = model;
+                    log.Location = location;
+                    log.Message = message;
+                    log.Level = level;
+                    log.Tag = tag;
+                    log.Message = message;
+                    log.StackTrace = stackTrace;
+                    log.DateTime = DateTime.Now;
+                    foreach (var item in LogOutputHandlers)
+                        item.Write(log);
+                }
+            }
+            catch { }
+        }
+    }
 
 }

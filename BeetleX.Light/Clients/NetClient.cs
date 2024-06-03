@@ -1,4 +1,5 @@
 ﻿using BeetleX.Light.Dispatchs;
+using BeetleX.Light.Extension;
 using BeetleX.Light.Logs;
 using BeetleX.Light.Memory;
 using BeetleX.Light.Protocols;
@@ -6,6 +7,7 @@ using System;
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO.Pipelines;
 using System.IO.Pipes;
 using System.Linq;
@@ -31,6 +33,7 @@ namespace BeetleX.Light.Clients
             LineEof = Encoding.UTF8.GetBytes("\r\n");
             TimeOut = 20000;
             _ioQueue = new IOQueue();
+            ReceiveBufferSize = Constants.MemorySegmentMinSize;
         }
 
         public static implicit operator NetClient((string, int) info)
@@ -42,6 +45,12 @@ namespace BeetleX.Light.Clients
         public static implicit operator NetClient(string uri)
         {
             Uri uriInfo = new Uri(uri);
+            var NetClient = new NetClient(uriInfo.Host, uriInfo.Port);
+            return NetClient;
+        }
+        public static implicit operator NetClient(Uri uri)
+        {
+            Uri uriInfo = uri;
             var NetClient = new NetClient(uriInfo.Host, uriInfo.Port);
             return NetClient;
         }
@@ -174,7 +183,7 @@ namespace BeetleX.Light.Clients
             {
                 GetLoger(LogLevel.Error)?.WriteException(this, "NetClient", "Connect", e_);
                 Connected = false;
-                throw new BXException($"Client connect to server error {e_.Message}!");
+                throw new BXException($"Client connect to {EndPoint?.ToString()} error {e_.Message}!");
             }
             finally
             {
@@ -205,9 +214,10 @@ namespace BeetleX.Light.Clients
         private SendWork _sendWork = new SendWork();
         private void OnStreamFlushCompleted(MemoryBlock data)
         {
-            _sendWork.Client = this;
-            _sendWork.Data = data;
-            _ioQueue.Schedule(_sendWork);
+            //_sendWork.Client = this;
+            //_sendWork.Data = data;
+            //_ioQueue.Schedule(_sendWork);
+            var task = SendToSocket(data, true);
         }
         internal async Task SendToSocket(MemoryBlock segment, bool begin)
         {
@@ -221,6 +231,8 @@ namespace BeetleX.Light.Clients
                 {
 
                     var len = await Socket.SendAsync(buffer);
+                    SocketProcessHandler?.SendCompeted(this, buffer, len);
+                    SencCompleted(len);
                     GetLoger(LogLevel.Debug)?.Write(this, "NetClient", "SendData", $"Length {len}");
                     GetLoger(LogLevel.Trace)?.Write(this, "NetClient", "✉ SendData", $"{Convert.ToHexString(buffer.Slice(0, len).Span)}");
                     if (len != buffer.Length)
@@ -248,11 +260,14 @@ namespace BeetleX.Light.Clients
             }
             if (begin)
             {
-                _sendState = 0;
-                Send(null);
+                if (_sendState != 0)
+                {
+                    _sendState = 0;
+                    Send(null);
+                }
             }
         }
-        protected async Task ReceiveToNetStream()
+        protected async Task ReceiveFromSocket()
         {
             var writer = NetStream.ReadSoecketStream;
             while (true)
@@ -261,6 +276,8 @@ namespace BeetleX.Light.Clients
                 try
                 {
                     int bytesRead = await Socket.ReceiveAsync(memory, SocketFlags.None);
+                    SocketProcessHandler?.ReceiveCompeted(this, memory, bytesRead);
+                    ReceiveCompleted(bytesRead);
                     GetLoger(LogLevel.Debug)?.Write(this, "NetClient", "ReceiveData", $"Length {bytesRead}");
                     GetLoger(LogLevel.Trace)?.Write(this, "NetClient", "✉ ReceiveData", $"{Convert.ToHexString(memory.Slice(0, bytesRead).Span)}");
                     if (bytesRead == 0)
@@ -332,7 +349,7 @@ namespace BeetleX.Light.Clients
             }
         }
 
-        public async ValueTask Connect()
+        public async Task Connect()
         {
             var result = await OnConnect();
             if (result.NewConnection)
@@ -442,7 +459,7 @@ namespace BeetleX.Light.Clients
         {
             try
             {
-                var receiveTask = ReceiveToNetStream();
+                var receiveTask = ReceiveFromSocket();
 
             }
             catch (Exception e_)
@@ -461,9 +478,12 @@ namespace BeetleX.Light.Clients
                 await Socket.ConnectAsync(EndPoint);
                 return;
             }
-            IPHostEntry localhost = await Dns.GetHostEntryAsync(Host);
-            // This is the IP address of the local machine
-            IPAddress localIpAddress = localhost.AddressList[0];
+            if (!IPAddress.TryParse(Host, out var localIpAddress))
+            {
+                IPHostEntry localhost = await Dns.GetHostEntryAsync(Host);
+                // This is the IP address of the local machine
+                localIpAddress = localhost.AddressList[0];
+            }
             Socket = new Socket(localIpAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
             Socket.NoDelay = NoDelay;
             if (LocalEndPoint != null)
@@ -601,9 +621,11 @@ namespace BeetleX.Light.Clients
         private System.Collections.Concurrent.ConcurrentQueue<object> _sendQueue = new System.Collections.Concurrent.ConcurrentQueue<object>();
 
         private int _sendState = 0;
-        public async Task Send(object message)
+        public void Send(object message)
         {
-            await Connect();
+            var task = Connect();
+            if (!task.IsCompleted)
+                task.Wait(ConnectTimeOut);
             if (message != null)
                 _sendQueue.Enqueue(message);
             if (_sendQueue.Count > 0)
@@ -660,5 +682,32 @@ namespace BeetleX.Light.Clients
         {
             Disconnect(e);
         }
+
+
+        public void SencCompleted(int bytes)
+        {
+            if (LogLevel <= LogLevel.Info)
+            {
+                NetworkStatistics.SendIO.Add(1);
+                NetworkStatistics.SendBytes.Add(bytes);
+                NetworkStatistics.NetWorkIO.Add(1);
+                NetworkStatistics.NetWorkBytes.Add(bytes);
+            }
+        }
+
+        public void ReceiveCompleted(int bytes)
+        {
+            if (LogLevel <= LogLevel.Info)
+            {
+                NetworkStatistics.ReceiveIO.Add(1);
+                NetworkStatistics.Receiveytes.Add(bytes);
+                NetworkStatistics.NetWorkIO.Add(1);
+                NetworkStatistics.NetWorkBytes.Add(bytes);
+            }
+        }
+
+        public NetworkStatistics NetworkStatistics { get; private set; } = new NetworkStatistics();
+
+        public ISocketProcessHandler SocketProcessHandler { get; set; }
     }
 }

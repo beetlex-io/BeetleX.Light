@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using System.Transactions;
 using BeetleX.Light.Args;
 using BeetleX.Light.Dispatchs;
+using BeetleX.Light.Extension;
 using BeetleX.Light.Logs;
 using BeetleX.Light.Memory;
 using BeetleX.Light.Protocols;
@@ -29,9 +30,12 @@ namespace BeetleX.Light
             _acceptthreadDispatcher
             = new DispatchCenter<(Socket, ListenHandler)>(OnConnecting, Environment.ProcessorCount > 16 ? 16 : Environment.ProcessorCount);
             CommandLineParser = CommandLineParser.GetCommandLineParser();
+            _netServerStatus = new NetServerStatus(this);
         }
 
         private long mID;
+
+        private NetServerStatus _netServerStatus;
 
         private System.Collections.Concurrent.ConcurrentDictionary<long, NetContext> _userContexts = new System.Collections.Concurrent.ConcurrentDictionary<long, NetContext>();
 
@@ -63,6 +67,8 @@ namespace BeetleX.Light
         public StartArgs StartArgs { get; set; }
 
         public EndPoint EndPoint { get; set; }
+
+        public NetworkStatistics NetworkStatistics { get; private set; } = new NetworkStatistics();
 
         private long GetID()
         {
@@ -139,6 +145,7 @@ namespace BeetleX.Light
                     GetLoger(LogLevel.Info)?.Write(netContext, "NetServer", "✔ NetContext", $"Connected");
                     OnSessionConnect(netContext);
                     var task = StartNetContext(netContext);
+                    NetworkStatistics.Connections.Add(1);
                 }
                 else
                 {
@@ -153,11 +160,9 @@ namespace BeetleX.Light
         }
 
 
-
-
         private async Task StartNetContext(NetContext context)
         {
-            var reviceTask = context.ReceiveToNetStream();
+            var reviceTask = context.ReceiveFromSocket();
             await reviceTask;
             _userContexts.TryRemove(context.ID, out context);
             OnApplicationDisconnect(context);
@@ -330,5 +335,29 @@ namespace BeetleX.Light
             _userContexts.TryGetValue(id, out NetContext result);
             return result;
         }
+
+        public void SencCompleted(int bytes)
+        {
+            if (Options.LogLevel <= LogLevel.Info)
+            {
+                NetworkStatistics.SendIO.Add(1);
+                NetworkStatistics.SendBytes.Add(bytes);
+                NetworkStatistics.NetWorkIO.Add(1);
+                NetworkStatistics.NetWorkBytes.Add(bytes);
+            }
+        }
+
+        public void ReceiveCompleted(int bytes)
+        {
+            if (Options.LogLevel <= LogLevel.Info)
+            {
+                NetworkStatistics.ReceiveIO.Add(1);
+                NetworkStatistics.Receiveytes.Add(bytes);
+                NetworkStatistics.NetWorkIO.Add(1);
+                NetworkStatistics.NetWorkBytes.Add(bytes);
+            }
+        }
+
+
     }
 }

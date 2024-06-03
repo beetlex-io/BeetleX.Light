@@ -20,6 +20,10 @@ namespace BeetleX.Light
 
         void Dispose(NetContext context);
 
+        void SencCompleted(int bytes);
+
+        void ReceiveCompleted(int bytes);
+
     }
 
     public class SesionBase : ISession
@@ -39,6 +43,16 @@ namespace BeetleX.Light
 
         public virtual void Receive(NetContext context, object message)
         {
+        }
+
+        public virtual void ReceiveCompleted(int bytes)
+        {
+
+        }
+
+        public virtual void SencCompleted(int bytes)
+        {
+
         }
     }
 }
